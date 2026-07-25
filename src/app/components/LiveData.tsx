@@ -11,8 +11,8 @@ import {
 } from 'react-icons/fa'
 import { toast } from 'react-toastify';
 
-const LIVE_API_BASE = 'https://isc-tally-live-35486280762.us-central1.run.app';
-const API_HEADERS = { 'x-api-key': 'necjhbejnu%@#987*(hbhexbw7815)dataliveactive@3417hbjbexexjja@A' };
+const LIVE_API_BASE = process.env.NEXT_PUBLIC_LIVE_API_BASE_URL || '';
+const API_HEADERS = { 'x-api-key': process.env.NEXT_PUBLIC_LIVE_API_KEY || '' };
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const DAYS   = ['Su','Mo','Tu','We','Th','Fr','Sa'];
 const REPORT_NAMES = ['Sales Register', 'Purchase Register', 'Funds Flow', 'Cash Flow'];

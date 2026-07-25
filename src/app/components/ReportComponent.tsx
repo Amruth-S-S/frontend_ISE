@@ -9,8 +9,8 @@ import {
 } from 'react-icons/fa';
 import { MdArrowDropDown } from 'react-icons/md';
 
-const API_BASE = 'https://filter-data-isc-35486280762.us-central1.run.app';
-const API_HEADERS = { 'x-api-key': 'ytsyxvtywfqvg@1209567TEAHBjhbwxuywbPo()*&%$Rssx' };
+const API_BASE = process.env.NEXT_PUBLIC_REPORT_API_BASE_URL || '';
+const API_HEADERS = { 'x-api-key': process.env.NEXT_PUBLIC_REPORT_API_KEY || '' };
 const PER_PAGE = 20;
 
 // ── Types ─────────────────────────────────────────────────────
