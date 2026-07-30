@@ -20,7 +20,7 @@ import React from "react";
 import { saveAs } from 'file-saver';
 import * as XLSX from 'xlsx';
 // import { useDropzone } from "react-dropzone";
-import { PencilIcon, TrashIcon, PlusIcon, CheckIcon, ChevronUpIcon, ChevronDownIcon, Edit, Sparkles, LayoutGrid, MousePointerClick } from 'lucide-react';
+import { PencilIcon, TrashIcon, PlusIcon, CheckIcon, ChevronUpIcon, ChevronDownIcon, Edit, Sparkles, LayoutGrid, MousePointerClick, MessageCircle } from 'lucide-react';
 import { Pie, Bar, Line } from "react-chartjs-2";
 import { MdArrowDropDown, MdArrowDropUp } from 'react-icons/md';
 import {
@@ -46,6 +46,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import TallySetting from "../components/TallySetting";
 import ManageParameterSetting from "../components/Manageparametersetting";
 import KpiUpdates from "../components/KpiUpdates";
+import TransactionData from "../components/transactionData";
 import dynamic from "next/dynamic";
 const ReportComponent = dynamic(() => import("../components/ReportComponent"), { ssr: false });
 const LiveData = dynamic(() => import("../components/LiveData"), { ssr: false });
@@ -375,6 +376,8 @@ function GroupContainerPage() {
   ]);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [emailData, setEmailData] = useState({ email: '', subject: '', message: '', tableOption: 'limited', reportType: '' });
+  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
+  const [whatsappData, setWhatsappData] = useState({ phoneNumber: '', message: '', tableOption: 'limited', reportType: '' });
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [activeScreenRole, setActiveScreenRole] = useState<'consultant' | 'cxo'>('consultant');
@@ -461,6 +464,15 @@ function GroupContainerPage() {
   const [selectedPgTable, setSelectedPgTable] = useState<any | null>(null);
   const [showAddDataSourceModal, setShowAddDataSourceModal] = useState(false);
   const [showTopBtn, setShowTopBtn] = useState(false);
+  const [showMainTopBtn, setShowMainTopBtn] = useState(false);
+  // The outer content wrapper below is `min-h-screen` (grows with content rather
+  // than capping at the viewport), so the browser window scrolls, not the div —
+  // track window scroll instead of relying on the div's own onScroll.
+  useEffect(() => {
+    const handleWindowScroll = () => setShowMainTopBtn(window.scrollY > 200);
+    window.addEventListener('scroll', handleWindowScroll);
+    return () => window.removeEventListener('scroll', handleWindowScroll);
+  }, []);
   const [resultTab, setResultTab] = useState('message');
   const [columnMetadata, setColumnMetadata] = useState<any[]>([]);
   const [columnMetaLoading, setColumnMetaLoading] = useState(false);
@@ -476,7 +488,6 @@ function GroupContainerPage() {
   });
   const [isAddingDataSource, setIsAddingDataSource] = useState(false);
   const [data, setData] = useState<DocumentationItem[]>([]);
-  const [dataFiltered, setDataFiltered] = useState<DocumentationItem[]>([]);
 
   const [deleteDataSourceConfirm, setDeleteDataSourceConfirm] = useState<{
     isOpen: boolean;
@@ -635,8 +646,11 @@ useEffect(() => {
 
 useEffect(() => {
   if (dataSources.length === 0) return;
+  // Only needed on tabs that actually show the filter status badge —
+  // skip it on "tables" (Manage Tables) so that tab only fires add/get data-source calls.
+  if (activeTab !== "prompts" && activeTab !== "parameter") return;
 
-  fetchParamFilterStatuses(); // initial fetch when data sources load
+  fetchParamFilterStatuses(); // initial fetch when data sources load or tab switches
 
   // Poll every 5 seconds only on parameter tab
   const interval = setInterval(() => {
@@ -646,7 +660,7 @@ useEffect(() => {
   }, 5000);
 
   return () => clearInterval(interval);
-}, [dataSources]);
+}, [dataSources, activeTab]);
 
   const fetchFilterStatuses = async () => {
   if (!boardId || dataSources.length === 0) return;
@@ -836,10 +850,12 @@ useEffect(() => {
 
   // ADD THIS NEW ONE:
 useEffect(() => {
-  if (dataSources.length > 0) {
+  // Only needed on "prompts" (Manage Prompts) where filterStatusMap is shown —
+  // skip it on "tables" (Manage Tables) so that tab only fires add/get data-source calls.
+  if (dataSources.length > 0 && activeTab === "prompts") {
     fetchFilterStatuses();
   }
-}, [dataSources]);
+}, [dataSources, activeTab]);
 
 
   // Add this helper function near your other helpers
@@ -988,7 +1004,6 @@ useEffect(() => {
     // After successful upload, refresh so the row shows up with its current
     // approval status (and Approve button, if still pending).
     await fetchDataSources(); // refresh approved sources
-    await fetchRows();        // refresh info-objects list (whatever your rows fetch fn is)
   };
 
   const handleViewTables = async () => {
@@ -1358,172 +1373,6 @@ useEffect(() => {
 
 
 
-  // Direct approval without modal
- // Direct approval without modal
-  const handleDirectApprove = async (type: 'table' | 'file', id: string, tableId?: string) => {
-    try {
-      let endpoint;
-      let userId: string | null = null;
-
-      const currentUserData = sessionStorage.getItem("currentUserData");
-      if (currentUserData) {
-        try {
-          const parsed = JSON.parse(currentUserData);
-          userId = String(parsed.userId);
-        } catch (e) {
-          console.error("Failed to parse session:", e);
-        }
-      }
-
-      if (!userId) {
-        toast.error("User session not found. Please log in again.");
-        return;
-      }
-
-      if (type === 'table') {
-        const tableRow = rows.find(r => r.id === id);
-        if (!tableRow) {
-          toast.error("Table not found");
-          return;
-        }
-
-        const loadingToast = toast.loading("Adding CSV as data source...");
-
-        try {
-          // STEP 1: Add CSV as data source
-          const addCsvResponse = await fetch(
-            `${API_BASE_URL}/main-boards/boards/data-sources/board/${boardId}/add-csv?user_id=${parseInt(userId, 10)}`,
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "X-API-Key": EXCEL_API_KEY
-              },
-              body: JSON.stringify({
-                data_management_table_id: parseInt(id, 10),
-                source_name: tableRow.table_name,
-                description: tableRow.table_description
-              }),
-            }
-          );
-
-          if (!addCsvResponse.ok) {
-            const errorData = await addCsvResponse.json();
-            toast.dismiss(loadingToast);
-            toast.error(`Failed to add CSV: ${errorData.detail || errorData.message || "Unknown error"}`);
-            return;
-          }
-
-          const csvResult = await addCsvResponse.json();
-
-          // STEP 2: Try approve — but don't fail if CORS blocks it on localhost
-          try {
-            const approveResponse = await fetch(
-              `${API_BASE_URL}/main-boards/boards/data-management-table/status/approve/${id}?new_approval_status=true`,
-              {
-                method: "PUT",
-                headers: {
-                  "Content-Type": "application/json",
-                  "X-API-Key": EXCEL_API_KEY
-                }
-              }
-            );
-            if (!approveResponse.ok) {
-              console.warn("Approve endpoint failed — continuing with optimistic UI update");
-            }
-          } catch (approveError) {
-            // CORS on localhost — safe to ignore, works fine in production
-            console.warn("Approve CORS error (localhost only):", approveError);
-          }
-
-          // STEP 3: Update UI optimistically regardless
-          setRows((prevRows) =>
-            prevRows.map((row) =>
-              row.id === id ? { ...row, approval_status: 'approved' } : row
-            )
-          );
-
-          toast.dismiss(loadingToast);
-          toast.success(
-            `✅ Info-Object approved and added to Slot ${csvResult.slot_number}/${csvResult.total_slots}!`,
-            { autoClose: 4000 }
-          );
-
-          try {
-            await fetchDataSources();
-          } catch (e) {
-            console.warn("fetchDataSources failed silently:", e);
-          }
-
-        } catch (error) {
-          toast.dismiss(loadingToast);
-          console.error("Error in approval process:", error);
-          toast.error("An error occurred during approval");
-        }
-
-
-      } else {
-        endpoint = `${API_BASE_URL}/main-boards/boards/data-management-table/status/approve/${id}?new_approval_status=true`;
-
-        const response = await fetch(endpoint, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            "X-API-Key": EXCEL_API_KEY
-          }
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          toast.error(`Failed to approve: ${errorData.message || "Unknown error"}`);
-          return;
-        }
-
-        setRows((prevRows) =>
-          prevRows.map((row) => {
-            if (row.id === tableId) {
-              return {
-                ...row,
-                files: row.files.map((file) =>
-                  file.id === id ? { ...file, approval_status: 'approved' } : file
-                ),
-              };
-            }
-            return row;
-          })
-        );
-        toast.success("File approved successfully!");
-
-        // ✅ fetchDataSources inside its own try so errors don't trigger outer catch
-        try {
-          await fetchDataSources();
-        } catch (e) {
-          console.warn("fetchDataSources failed silently:", e);
-        }
-      }
-
-    } catch (error) {
-      console.error("Error approving:", error);
-      toast.error("An error occurred while approving");
-    }
-    // ❌ removed: await fetchDataSources() — was causing outer catch to fire
-  };
-
-  // Auto-approve: as soon as a pending Info-Object has a file attached, promote it
-  // to a data source automatically — no manual "Approve" click required.
-  const autoApprovingIdsRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    rows.forEach(row => {
-      const isPendingWithFile = (!row.approval_status || row.approval_status === 'pending')
-        && row.files && row.files.length > 0;
-      const alreadyLinked = dataSources.some(s => String(s.data_management_table_id) === String(row.id));
-      if (isPendingWithFile && !alreadyLinked && !autoApprovingIdsRef.current.has(row.id)) {
-        autoApprovingIdsRef.current.add(row.id);
-        handleDirectApprove('table', row.id);
-      }
-    });
-  }, [rows, dataSources]);
-
   // Multiple file upload handler
   const handleMultipleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []) as File[];
@@ -1643,6 +1492,54 @@ useEffect(() => {
       toast.error(`Failed to send email: ${errorMessage}`);
     } finally {
       setShowEmailModal(false);
+      setShowDownloadModal(false);
+    }
+  };
+
+
+  const sendViaWhatsApp = async (includeTable: boolean | undefined, tableOption: string | undefined) => {
+    if (!whatsappData.phoneNumber) {
+      toast.error('Please enter a recipient WhatsApp number');
+      return;
+    }
+    try {
+      // Generate PPT client-side using PptxGenJS (same as download/email, avoids CORS/backend issues)
+      const pptBase64 = await downloadPPT(
+        includeTable ?? true,
+        tableOption ?? 'limited',
+        true
+      ) as string;
+
+      if (!pptBase64) {
+        throw new Error('Failed to generate PPT — please check that there is chart/table data available.');
+      }
+
+      // Send via Next.js API route (calls Twilio's WhatsApp API server-side, no CORS)
+      const response = await fetch('/api/send-report-whatsapp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phoneNumber: whatsappData.phoneNumber,
+          message: whatsappData.message || '',
+          reportType: includeTable ? 'complete' : 'charts-only',
+          tableOption: tableOption || 'limited',
+          pptBase64,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || result.error || `HTTP ${response.status}`);
+      }
+
+      toast.success('WhatsApp message sent successfully!');
+    } catch (error) {
+      console.error('Error sending WhatsApp message:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error(`Failed to send WhatsApp message: ${errorMessage}`);
+    } finally {
+      setShowWhatsAppModal(false);
       setShowDownloadModal(false);
     }
   };
@@ -3116,166 +3013,6 @@ useEffect(() => {
     }
   }, [activeTab, fetchData]);
 
-  // NEW: Fetch from the old /ai-documentation/ endpoint, filtered by boardId
-  const fetchDataFiltered = useCallback(async () => {
-    if (!boardId) return;
-
-    setLoading(true);
-    try {
-      const response = await axios.get(
-        `${API_BASE_URL}/main-boards/boards/ai-documentation/`,
-        {
-          headers: {
-            "Content-Type": "application/json",
-            "X-API-Key": EXCEL_API_KEY,
-          },
-        }
-      );
-
-      // console.log("Fetched All Documentation:", response.data);
-
-      const filteredData = response.data.filter(
-        (item: { board_id: string }) => String(item.board_id) === String(boardId)
-      );
-
-      // console.log("Filtered Documentation:", filteredData);
-      setDataFiltered(filteredData);
-    } catch (error) {
-      console.error("Error fetching AI documentation (filtered):", error);
-    } finally {
-      setLoading(false);
-    }
-  }, [boardId]);
-
-  useEffect(() => {
-    if (boardId) {
-      fetchData();
-      fetchDataFiltered(); // ADD THIS
-    } else {
-      setLoading(false);
-    }
-  }, [boardId, fetchData, fetchDataFiltered]); // add fetchDataFiltered to deps
-
-  useEffect(() => {
-    // Only call fetchData if boardId exists
-    if (boardId) {
-      fetchData();
-    } else {
-      setLoading(false);
-      // If boardId does not exist, fetch all data or handle accordingly
-      // Uncomment the following line if you want to fetch all data when no boardId
-      // fetchData();
-    }
-  }, [boardId, fetchData]);
-
-  // Add this to load data immediately when component mounts
-  useEffect(() => {
-    // Force a re-trigger of the above useEffect if boardId exists
-    if (boardId) {
-      setLoading(true); // Trigger loading state
-    }
-  }, []); // Runs once on mount
-  const handleSaveFilteredClicks = async (id: string, boardId: string | null) => {
-    if (!id || !boardId) {
-      console.error("Missing parameters:", { id, boardId });
-      toast.error("Error: Missing required parameters.");
-      return;
-    }
-
-    try {
-      // Cast to any to handle extra fields (name, configuration_details) from old API
-      const source = dataFiltered.find((s) => String(s.id) === String(id)) as any;
-      if (!source) return;
-
-      // Build columns array — support both .columns array and legacy configuration_details object
-      const columns: { column_name: string; description: string }[] =
-        source.columns ||
-        Object.entries((source.configuration_details as Record<string, string>) || {}).map(([k, v]) => ({
-          column_name: k,
-          description: String(v),
-        }));
-
-      // Build updated configuration_details from editValues
-      const updatedDetails: Record<string, string> = {};
-      columns.forEach((col) => {
-        updatedDetails[col.column_name] =
-          editValues[id]?.[col.column_name] ?? col.description;
-      });
-
-      const payload = {
-        board_id: parseInt(boardId),
-        column_count: columns.length,
-        configuration_details: JSON.stringify(updatedDetails),
-        data_source_id: source.data_source_id,
-        name: (source.source_name as string) || (source.name as string),
-        source_type: source.source_type,
-      };
-
-      // console.log("PUT payload (filtered):", payload);
-
-      const response = await fetch(
-        `${API_BASE_URL}/main-boards/boards/ai-documentation/${id}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            "X-API-Key": EXCEL_API_KEY,
-          },
-          body: JSON.stringify(payload),
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error("Error details:", errorData);
-        toast.error(`Error: ${JSON.stringify(errorData)}`);
-        return;
-      }
-
-      const result = await response.json();
-      // console.log("Update successful:", result);
-
-      // Update local dataFiltered state with edited descriptions
-      setDataFiltered((prevData) =>
-        prevData.map((item) => {
-          if (String(item.id) !== String(id)) return item;
-
-          const anyItem = item as any;
-          const updatedConfig: Record<string, string> = {};
-          columns.forEach((col) => {
-            updatedConfig[col.column_name] =
-              editValues[id]?.[col.column_name] ?? col.description;
-          });
-
-          return {
-            ...anyItem,
-            configuration_details: updatedConfig,
-            columns: anyItem.columns
-              ? anyItem.columns.map((col: any) => ({
-                ...col,
-                description:
-                  editValues[id]?.[col.column_name] ?? col.description,
-              }))
-              : undefined,
-          } as any;
-        })
-      );
-
-      // Clear edit state
-      setEditRowId(null);
-      setEditRowKey(null);
-      setEditValues((prev) => {
-        const updated = { ...prev };
-        delete updated[id];
-        return updated;
-      });
-
-      toast.success("Documentation updated successfully!");
-    } catch (error) {
-      console.error("Network or unexpected error:", error);
-      toast.error("A network error occurred. Check the console for details.");
-    }
-  };
   const [isListening, setIsListening] = useState(false);
 
 const handleVoiceInput = () => {
@@ -3478,70 +3215,7 @@ const SpeechRecognition =
 
 
   // Fetch table data for the specific board
-
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const response = await fetch(
-          `${API_BASE_URL}/main-boards/boards/data-management-table/get_all_tables_with_files`,
-          {
-            headers: {
-              "X-API-Key": EXCEL_API_KEY,
-            },
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error("Failed to fetch data");
-        }
-
-        const data = await response.json();
-
-        // Filter the fetched data based on board_id
-        const filteredData = data.filter(
-          (row: { board_id: number }) => row.board_id === parseInt(boardId!)
-        );
-        setRows(filteredData); // Set the filtered data to the rows state
-      } catch (err) {
-        if (err instanceof Error) {
-          setError(err.message);
-        } else {
-          setError("An unknown error occurred");
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (view === "manage-tables" && boardId) {
-      fetchData();
-    }
-  }, [view, boardId]);
-
-
-  // Add this OUTSIDE the useEffect, as a standalone function
-  const fetchRows = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/main-boards/boards/data-management-table/get_all_tables_with_files`,
-        {
-          headers: { "X-API-Key": EXCEL_API_KEY },
-        }
-      );
-      if (!response.ok) throw new Error("Failed to fetch data");
-      const data = await response.json();
-      const filteredData = data.filter(
-        (row: { board_id: number }) => row.board_id === parseInt(boardId!)
-      );
-      setRows(filteredData);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An unknown error occurred");
-    } finally {
-      setLoading(false);
-    }
-  };
+  // get_all_tables_with_files call removed — Manage Tables no longer fetches rows.
 
 
   useEffect(() => {
@@ -4438,7 +4112,10 @@ const SpeechRecognition =
   return (
 
 
-    <div className="flex-1 overflow-y-auto bg-gray-200 rounded-2xl shadow-lg border border-gray-200 min-h-screen">
+    <div
+      id="group-container-main-scroll"
+      className="flex-1 overflow-y-auto bg-gray-200 rounded-2xl shadow-lg border border-gray-200 min-h-screen"
+    >
       <header className="bg-white p-3 shadow-sm">
         <div className="flex justify-end items-center gap-2 max-w-screen-xl mx-auto">
           {/* Language Selector */}
@@ -4538,8 +4215,9 @@ const SpeechRecognition =
                   // { key: "parameter",  label: t("tabs.parameterSettings") },
                   // { key: "timeline",   label: t("tabs.timelineSettings") },
                   { key: "kpi",           label: t("tabs.kpiUpdates") },
+                  { key: "transactionData", label: "Transaction Data" },
                   { key: "report",        label: t("tabs.reports") },
-                ].filter((tab) => !(hideUsRestrictedTabs && (tab.key === "report" || tab.key === "kpi"))).map((tab) => (
+                ].filter((tab) => !(hideUsRestrictedTabs && (tab.key === "report" || tab.key === "kpi" || tab.key === "transactionData"))).map((tab) => (
                   <button
                     key={tab.key}
                     className={`flex-shrink-0 px-3 py-1.5 rounded-md font-medium transition-all duration-200 text-xs whitespace-nowrap ${activeTab === tab.key
@@ -4573,8 +4251,9 @@ const SpeechRecognition =
                       // { key: "parameter",  label: t("tabs.parameterSettings") },
                       // { key: "timeline",   label: t("tabs.timelineSettings") },
                       { key: "kpi",           label: t("tabs.kpiUpdates") },
+                      { key: "transactionData", label: "Transaction Data" },
                       { key: "report",        label: t("tabs.reports") },
-                    ].filter((tab) => !(hideUsRestrictedTabs && (tab.key === "report" || tab.key === "kpi"))).find((tab) => tab.key === activeTab)?.label ?? t("header.selectScreen")}
+                    ].filter((tab) => !(hideUsRestrictedTabs && (tab.key === "report" || tab.key === "kpi" || tab.key === "transactionData"))).find((tab) => tab.key === activeTab)?.label ?? t("header.selectScreen")}
                   </span>
                   <span className="ml-2 text-gray-400 text-xs">{isMobileMenuOpen ? "▲" : "▼"}</span>
                 </button>
@@ -4594,8 +4273,9 @@ const SpeechRecognition =
                         // { key: "parameter",  label: t("tabs.parameterSettings") },
                         // { key: "timeline",   label: t("tabs.timelineSettings") },
                         { key: "kpi",           label: t("tabs.kpiUpdates") },
+                        { key: "transactionData", label: "Transaction Data" },
                         { key: "report",        label: t("tabs.reports") },
-                      ].filter((tab) => !(hideUsRestrictedTabs && (tab.key === "report" || tab.key === "kpi"))).map((tab) => (
+                      ].filter((tab) => !(hideUsRestrictedTabs && (tab.key === "report" || tab.key === "kpi" || tab.key === "transactionData"))).map((tab) => (
                         <button
                           key={tab.key}
                           className={`w-full text-left px-3 py-2 rounded-md transition-colors text-xs ${activeTab === tab.key
@@ -5422,17 +5102,17 @@ const SpeechRecognition =
                                 </button> */}
                                 {showDownloadModal && (
                                   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                                    <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
+                                    <div className="bg-white p-6 rounded-lg shadow-xl max-w-lg w-full">
                                       <h3 className="text-xl font-bold text-blue-700 mb-4">Download Report Options</h3>
                                       <p className="font-bold mb-2">Charts Only:</p>
                                       <p className="mb-4">Please select the type of report you would like to download:</p>
-                                      <div className="flex gap-2">
+                                      <div className="grid grid-cols-3 gap-2">
                                         <button
                                           onClick={() => {
                                             setShowDownloadModal(false);
                                             downloadPPT(false, 'limited');
                                           }}
-                                          className="flex-1 py-2 bg-blue-600 text-white rounded font-medium hover:bg-blue-700 transition-colors"
+                                          className="py-2 bg-blue-600 text-white rounded font-medium hover:bg-blue-700 transition-colors text-sm"
                                         >
                                           Download
                                         </button>
@@ -5447,9 +5127,24 @@ const SpeechRecognition =
                                             }));
                                             setShowEmailModal(true);
                                           }}
-                                          className="flex-1 py-2 bg-green-600 text-white rounded font-medium hover:bg-green-700 transition-colors"
+                                          className="py-2 bg-green-600 text-white rounded font-medium hover:bg-green-700 transition-colors text-sm"
                                         >
                                           Send via Email
+                                        </button>
+                                        <button
+                                          onClick={() => {
+                                            const selectedOptionElement = document.querySelector('input[name="tableRows"]:checked');
+                                            const selectedOption = selectedOptionElement ? (selectedOptionElement as HTMLInputElement).value : 'limited';
+                                            setWhatsappData(prev => ({
+                                              ...prev,
+                                              reportType: 'complete',
+                                              tableOption: selectedOption
+                                            }));
+                                            setShowWhatsAppModal(true);
+                                          }}
+                                          className="py-2 bg-[#25D366] text-white rounded font-medium hover:bg-[#1ebe5d] transition-colors text-sm flex items-center justify-center gap-1"
+                                        >
+                                          <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
                                         </button>
                                       </div>
 
@@ -5480,7 +5175,7 @@ const SpeechRecognition =
                                             <label htmlFor="allRows">All table rows</label>
                                           </div>
                                         </div>
-                                        <div className="flex gap-2">
+                                        <div className="grid grid-cols-3 gap-2">
                                           <button
                                             onClick={() => {
                                               const selectedOptionElement = document.querySelector('input[name="tableRows"]:checked');
@@ -5488,7 +5183,7 @@ const SpeechRecognition =
                                               setShowDownloadModal(false);
                                               downloadPPT(true, selectedOption);
                                             }}
-                                            className="flex-1 py-2 bg-blue-600 text-white rounded font-medium hover:bg-blue-700 transition-colors"
+                                            className="py-2 bg-blue-600 text-white rounded font-medium hover:bg-blue-700 transition-colors text-sm"
                                           >
                                             Download
                                           </button>
@@ -5503,9 +5198,24 @@ const SpeechRecognition =
                                               }));
                                               setShowEmailModal(true);
                                             }}
-                                            className="flex-1 py-2 bg-green-600 text-white rounded font-medium hover:bg-green-700 transition-colors"
+                                            className="py-2 bg-green-600 text-white rounded font-medium hover:bg-green-700 transition-colors text-sm"
                                           >
                                             Send via Email
+                                          </button>
+                                          <button
+                                            onClick={() => {
+                                              const selectedOptionElement = document.querySelector('input[name="tableRows"]:checked');
+                                              const selectedOption = selectedOptionElement ? (selectedOptionElement as HTMLInputElement).value : 'limited';
+                                              setWhatsappData(prev => ({
+                                                ...prev,
+                                                reportType: 'complete',
+                                                tableOption: selectedOption
+                                              }));
+                                              setShowWhatsAppModal(true);
+                                            }}
+                                            className="py-2 bg-[#25D366] text-white rounded font-medium hover:bg-[#1ebe5d] transition-colors text-sm flex items-center justify-center gap-1"
+                                          >
+                                            <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
                                           </button>
                                         </div>
                                       </div>
@@ -5618,6 +5328,102 @@ const SpeechRecognition =
                                             onClick={() => {
                                               setShowEmailModal(false);
                                               setEmailData({ email: '', subject: '', message: '', tableOption: 'limited', reportType: '' });
+                                            }}
+                                            className="flex-1 py-2 bg-gray-200 text-gray-800 rounded border border-gray-300 hover:bg-gray-300 transition-colors"
+                                          >
+                                            Cancel
+                                          </button>
+                                        </div>
+                                      </form>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* WhatsApp Modal */}
+                                {showWhatsAppModal && (
+                                  <div
+                                    className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center"
+                                    style={{ zIndex: 9999 }}
+                                  >
+                                    <div className="bg-white p-6 rounded-lg shadow-xl max-w-lg w-full mx-4">
+                                      <h3 className="text-xl font-bold text-[#25D366] mb-4">Send Report via WhatsApp</h3>
+
+                                      <div className="mb-4 p-3 bg-blue-50 border-l-4 border-blue-400 rounded">
+                                        <p className="text-sm text-blue-800">
+                                          <strong>Report Type:</strong> {whatsappData.reportType === 'charts-only' ? 'Charts Only' : 'Complete Report'}
+                                          {whatsappData.reportType === 'complete' && (
+                                            <><br /><strong>Table Data:</strong> {whatsappData.tableOption === 'all' ? 'All rows' : 'First 20 rows only'}</>
+                                          )}
+                                        </p>
+                                      </div>
+
+                                      <form className="space-y-4">
+                                        <div>
+                                          <label htmlFor="whatsappNumber" className="block text-sm font-medium text-gray-700 mb-1">
+                                            Recipient WhatsApp Number *
+                                          </label>
+                                          <input
+                                            type="tel"
+                                            id="whatsappNumber"
+                                            value={whatsappData.phoneNumber}
+                                            onChange={(e) => setWhatsappData(prev => ({ ...prev, phoneNumber: e.target.value }))}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#25D366] focus:border-transparent"
+                                            placeholder="+919876543210"
+                                            required
+                                          />
+                                          <p className="mt-1 text-xs text-gray-400">Include the country code, e.g. +91 for India.</p>
+                                        </div>
+
+                                        <div>
+                                          <label htmlFor="whatsappMessage" className="block text-sm font-medium text-gray-700 mb-1">
+                                            Additional Message (Optional)
+                                          </label>
+                                          <textarea
+                                            id="whatsappMessage"
+                                            value={whatsappData.message}
+                                            onChange={(e) => setWhatsappData(prev => ({ ...prev, message: e.target.value }))}
+                                            rows={4}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#25D366] focus:border-transparent"
+                                            placeholder="Enter any additional message..."
+                                          />
+                                        </div>
+
+                                        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded">
+                                          <div className="flex">
+                                            <div className="flex-shrink-0">
+                                              <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                              </svg>
+                                            </div>
+                                            <div className="ml-3">
+                                              <p className="text-sm text-yellow-700">
+                                                The report will be sent as a WhatsApp document attachment to this number via our WhatsApp Business integration.
+                                              </p>
+                                            </div>
+                                          </div>
+                                        </div>
+
+                                        <div className="flex gap-3 pt-2">
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              if (!whatsappData.phoneNumber) {
+                                                toast.error('Please enter a recipient WhatsApp number');
+                                                return;
+                                              }
+                                              const includeTable = whatsappData.reportType === 'complete';
+                                              const tableOption = whatsappData.tableOption || 'limited';
+                                              sendViaWhatsApp(includeTable, tableOption);
+                                            }}
+                                            className="flex-1 py-2 bg-[#25D366] text-white rounded font-medium hover:bg-[#1ebe5d] transition-colors"
+                                          >
+                                            Send WhatsApp
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setShowWhatsAppModal(false);
+                                              setWhatsappData({ phoneNumber: '', message: '', tableOption: 'limited', reportType: '' });
                                             }}
                                             className="flex-1 py-2 bg-gray-200 text-gray-800 rounded border border-gray-300 hover:bg-gray-300 transition-colors"
                                           >
@@ -7187,17 +6993,17 @@ const SpeechRecognition =
                               <div>
                                 {showDownloadModal && (
                                   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                                    <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
+                                    <div className="bg-white p-6 rounded-lg shadow-xl max-w-lg w-full">
                                       <h3 className="text-xl font-bold text-blue-700 mb-4">Download Report Options</h3>
                                       <p className="font-bold mb-2">Charts Only:</p>
                                       <p className="mb-4">Please select the type of report you would like to download:</p>
-                                      <div className="flex gap-2">
+                                      <div className="grid grid-cols-3 gap-2">
                                         <button
                                           onClick={() => {
                                             setShowDownloadModal(false);
                                             downloadPPT(false, 'limited');
                                           }}
-                                          className="flex-1 py-2 bg-blue-600 text-white rounded font-medium hover:bg-blue-700 transition-colors"
+                                          className="py-2 bg-blue-600 text-white rounded font-medium hover:bg-blue-700 transition-colors text-sm"
                                         >
                                           Download
                                         </button>
@@ -7212,9 +7018,24 @@ const SpeechRecognition =
                                             }));
                                             setShowEmailModal(true);
                                           }}
-                                          className="flex-1 py-2 bg-green-600 text-white rounded font-medium hover:bg-green-700 transition-colors"
+                                          className="py-2 bg-green-600 text-white rounded font-medium hover:bg-green-700 transition-colors text-sm"
                                         >
                                           Send via Email
+                                        </button>
+                                        <button
+                                          onClick={() => {
+                                            const selectedOptionElement = document.querySelector('input[name="tableRows"]:checked');
+                                            const selectedOption = selectedOptionElement ? (selectedOptionElement as HTMLInputElement).value : 'limited';
+                                            setWhatsappData(prev => ({
+                                              ...prev,
+                                              reportType: 'complete',
+                                              tableOption: selectedOption
+                                            }));
+                                            setShowWhatsAppModal(true);
+                                          }}
+                                          className="py-2 bg-[#25D366] text-white rounded font-medium hover:bg-[#1ebe5d] transition-colors text-sm flex items-center justify-center gap-1"
+                                        >
+                                          <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
                                         </button>
                                       </div>
 
@@ -7245,7 +7066,7 @@ const SpeechRecognition =
                                             <label htmlFor="allRows">All table rows</label>
                                           </div>
                                         </div>
-                                        <div className="flex gap-2">
+                                        <div className="grid grid-cols-3 gap-2">
                                           <button
                                             onClick={() => {
                                               const selectedOptionElement = document.querySelector('input[name="tableRows"]:checked');
@@ -7253,7 +7074,7 @@ const SpeechRecognition =
                                               setShowDownloadModal(false);
                                               downloadPPT(true, selectedOption);
                                             }}
-                                            className="flex-1 py-2 bg-blue-600 text-white rounded font-medium hover:bg-blue-700 transition-colors"
+                                            className="py-2 bg-blue-600 text-white rounded font-medium hover:bg-blue-700 transition-colors text-sm"
                                           >
                                             Download
                                           </button>
@@ -7268,9 +7089,24 @@ const SpeechRecognition =
                                               }));
                                               setShowEmailModal(true);
                                             }}
-                                            className="flex-1 py-2 bg-green-600 text-white rounded font-medium hover:bg-green-700 transition-colors"
+                                            className="py-2 bg-green-600 text-white rounded font-medium hover:bg-green-700 transition-colors text-sm"
                                           >
                                             Send via Email
+                                          </button>
+                                          <button
+                                            onClick={() => {
+                                              const selectedOptionElement = document.querySelector('input[name="tableRows"]:checked');
+                                              const selectedOption = selectedOptionElement ? (selectedOptionElement as HTMLInputElement).value : 'limited';
+                                              setWhatsappData(prev => ({
+                                                ...prev,
+                                                reportType: 'complete',
+                                                tableOption: selectedOption
+                                              }));
+                                              setShowWhatsAppModal(true);
+                                            }}
+                                            className="py-2 bg-[#25D366] text-white rounded font-medium hover:bg-[#1ebe5d] transition-colors text-sm flex items-center justify-center gap-1"
+                                          >
+                                            <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
                                           </button>
                                         </div>
                                       </div>
@@ -7383,6 +7219,102 @@ const SpeechRecognition =
                                             onClick={() => {
                                               setShowEmailModal(false);
                                               setEmailData({ email: '', subject: '', message: '', tableOption: 'limited', reportType: '' });
+                                            }}
+                                            className="flex-1 py-2 bg-gray-200 text-gray-800 rounded border border-gray-300 hover:bg-gray-300 transition-colors"
+                                          >
+                                            Cancel
+                                          </button>
+                                        </div>
+                                      </form>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* WhatsApp Modal */}
+                                {showWhatsAppModal && (
+                                  <div
+                                    className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center"
+                                    style={{ zIndex: 9999 }}
+                                  >
+                                    <div className="bg-white p-6 rounded-lg shadow-xl max-w-lg w-full mx-4">
+                                      <h3 className="text-xl font-bold text-[#25D366] mb-4">Send Report via WhatsApp</h3>
+
+                                      <div className="mb-4 p-3 bg-blue-50 border-l-4 border-blue-400 rounded">
+                                        <p className="text-sm text-blue-800">
+                                          <strong>Report Type:</strong> {whatsappData.reportType === 'charts-only' ? 'Charts Only' : 'Complete Report'}
+                                          {whatsappData.reportType === 'complete' && (
+                                            <><br /><strong>Table Data:</strong> {whatsappData.tableOption === 'all' ? 'All rows' : 'First 20 rows only'}</>
+                                          )}
+                                        </p>
+                                      </div>
+
+                                      <form className="space-y-4">
+                                        <div>
+                                          <label htmlFor="whatsappNumber" className="block text-sm font-medium text-gray-700 mb-1">
+                                            Recipient WhatsApp Number *
+                                          </label>
+                                          <input
+                                            type="tel"
+                                            id="whatsappNumber"
+                                            value={whatsappData.phoneNumber}
+                                            onChange={(e) => setWhatsappData(prev => ({ ...prev, phoneNumber: e.target.value }))}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#25D366] focus:border-transparent"
+                                            placeholder="+919876543210"
+                                            required
+                                          />
+                                          <p className="mt-1 text-xs text-gray-400">Include the country code, e.g. +91 for India.</p>
+                                        </div>
+
+                                        <div>
+                                          <label htmlFor="whatsappMessage" className="block text-sm font-medium text-gray-700 mb-1">
+                                            Additional Message (Optional)
+                                          </label>
+                                          <textarea
+                                            id="whatsappMessage"
+                                            value={whatsappData.message}
+                                            onChange={(e) => setWhatsappData(prev => ({ ...prev, message: e.target.value }))}
+                                            rows={4}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#25D366] focus:border-transparent"
+                                            placeholder="Enter any additional message..."
+                                          />
+                                        </div>
+
+                                        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded">
+                                          <div className="flex">
+                                            <div className="flex-shrink-0">
+                                              <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                              </svg>
+                                            </div>
+                                            <div className="ml-3">
+                                              <p className="text-sm text-yellow-700">
+                                                The report will be sent as a WhatsApp document attachment to this number via our WhatsApp Business integration.
+                                              </p>
+                                            </div>
+                                          </div>
+                                        </div>
+
+                                        <div className="flex gap-3 pt-2">
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              if (!whatsappData.phoneNumber) {
+                                                toast.error('Please enter a recipient WhatsApp number');
+                                                return;
+                                              }
+                                              const includeTable = whatsappData.reportType === 'complete';
+                                              const tableOption = whatsappData.tableOption || 'limited';
+                                              sendViaWhatsApp(includeTable, tableOption);
+                                            }}
+                                            className="flex-1 py-2 bg-[#25D366] text-white rounded font-medium hover:bg-[#1ebe5d] transition-colors"
+                                          >
+                                            Send WhatsApp
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setShowWhatsAppModal(false);
+                                              setWhatsappData({ phoneNumber: '', message: '', tableOption: 'limited', reportType: '' });
                                             }}
                                             className="flex-1 py-2 bg-gray-200 text-gray-800 rounded border border-gray-300 hover:bg-gray-300 transition-colors"
                                           >
@@ -7790,11 +7722,25 @@ const SpeechRecognition =
           <KpiUpdates />
         )}
 
+        {activeTab === "transactionData" && !hideUsRestrictedTabs && (
+          <TransactionData />
+        )}
+
         {activeTab === "report" && !hideUsRestrictedTabs && (
           <ReportComponent />
         )}
 
       </div>
+
+      {/* Scroll to Top button — only after scrolling 200px down the page */}
+      {showMainTopBtn && (
+        <button
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          className="fixed bottom-6 right-6 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2 rounded-full shadow-lg z-[60] transition-all"
+        >
+          ↑ Top
+        </button>
+      )}
     </div >
   );
 

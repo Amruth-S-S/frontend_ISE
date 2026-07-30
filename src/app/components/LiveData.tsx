@@ -550,14 +550,14 @@ function ApiTabPanel({ apis }: { apis: ApiDef[] }) {
 
   const api = apis.find(a => a.key === activeApi)!;
 
-  // Populate the Stock Item Name dropdown from the stock_pro_tech table
+  // Populate the Stock Item Name dropdown from the Live_Stock table
   useEffect(() => {
     if (!api.hasStockItemName) return;
     let cancelled = false;
     setLoadingItems(true);
     (async () => {
       try {
-        const res = await fetch(`${LIVE_API_BASE}/tables/stock_pro_tech/data?limit=1000`, { headers: API_HEADERS });
+        const res = await fetch(`${LIVE_API_BASE}/tables/Live_Stock/data?limit=1000`, { headers: API_HEADERS });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         const { rows: r, columns: c } = extractData(json);
@@ -588,7 +588,7 @@ function ApiTabPanel({ apis }: { apis: ApiDef[] }) {
     setLoadingLedgerNames(true);
     (async () => {
       try {
-        const res = await fetch(`${LIVE_API_BASE}/tables/leder_name/data?limit=1000`, { headers: API_HEADERS });
+        const res = await fetch(`${LIVE_API_BASE}/tables/Live_Ledger_Name/data?limit=1000`, { headers: API_HEADERS });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         const { rows: r, columns: c } = extractData(json);
