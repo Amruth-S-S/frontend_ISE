@@ -3,10 +3,11 @@ FROM node:22.20.0-slim AS builder
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --only=production   # <-- only install production deps (saves space)
+RUN npm ci   # devDependencies (typescript, tailwindcss, postcss, cross-env) are required at build time
 
 COPY . .
 RUN npm run build
+RUN npm prune --omit=dev   # drop devDependencies now that the build output exists
 
 # ---------- Runtime Stage ----------
 FROM node:22.20.0-slim AS runner
