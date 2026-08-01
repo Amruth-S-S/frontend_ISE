@@ -180,12 +180,12 @@ function GroupFormModal({
     <div style={m.overlay} onClick={onClose}>
       <div style={{ ...m.box, maxWidth: 460 }} onClick={e => e.stopPropagation()}>
         <div style={m.header}>
-          <h3 style={m.title}>{mode === "create" ? "Create Role" : "Edit Group"}</h3>
+          <h3 style={m.title}>{mode === "create" ? "Create Role" : "Edit Role"}</h3>
           <button style={m.closeBtn} onClick={onClose}>✕</button>
         </div>
 
         <div style={{ marginBottom: 16 }}>
-          <label style={m.label}>Group Role <span style={{ color: "#ef4444" }}>*</span></label>
+          <label style={m.label}>Role <span style={{ color: "#ef4444" }}>*</span></label>
           <input
             style={m.input}
             placeholder="e.g. Finance Team"
