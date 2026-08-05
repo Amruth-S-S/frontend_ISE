@@ -20,7 +20,7 @@ import React from "react";
 import { saveAs } from 'file-saver';
 import * as XLSX from 'xlsx';
 // import { useDropzone } from "react-dropzone";
-import { PencilIcon, TrashIcon, PlusIcon, CheckIcon, ChevronUpIcon, ChevronDownIcon, Edit, Sparkles, LayoutGrid, MousePointerClick, MessageCircle } from 'lucide-react';
+import { PencilIcon, TrashIcon, PlusIcon, CheckIcon, ChevronUpIcon, ChevronDownIcon, Edit, Sparkles, LayoutGrid, MousePointerClick, MessageCircle, Users } from 'lucide-react';
 import { Pie, Bar, Line } from "react-chartjs-2";
 import { MdArrowDropDown, MdArrowDropUp } from 'react-icons/md';
 import {
@@ -1316,6 +1316,8 @@ useEffect(() => {
     role: "",
     orgId: "",
   });
+  // Name of the Role (group) the logged-in user's email belongs to — shown in the header.
+  const [userRoleName, setUserRoleName] = useState<string | null>(null);
 
 
 
@@ -1337,6 +1339,43 @@ useEffect(() => {
       }
     }
   }, []);
+
+  // Resolve which Role (group) the logged-in user's email belongs to, so the
+  // header can display it. Checks the org's groups, then each group's members,
+  // for an email match — there is no direct "my role" endpoint.
+  useEffect(() => {
+    if (!user.orgId || !user.id || !user.email) return;
+    let cancelled = false;
+    const resolveUserRole = async () => {
+      try {
+        const groupsRes = await fetch(
+          `${API_BASE_URL}/organizations/${user.orgId}/groups?requester_user_id=${user.id}`,
+          { headers: { Accept: "application/json", "X-API-Key": EXCEL_API_KEY } },
+        );
+        if (!groupsRes.ok) return;
+        const groups: { id: number; name: string }[] = await groupsRes.json();
+        const targetEmail = user.email.trim().toLowerCase();
+        for (const group of groups) {
+          if (cancelled) return;
+          const membersRes = await fetch(
+            `${API_BASE_URL}/organizations/${user.orgId}/groups/${group.id}/members?requester_user_id=${user.id}`,
+            { headers: { Accept: "application/json", "X-API-Key": EXCEL_API_KEY } },
+          );
+          if (!membersRes.ok) continue;
+          const members: { user_email?: string | null }[] = await membersRes.json();
+          if (members.some(m => (m.user_email || "").trim().toLowerCase() === targetEmail)) {
+            if (!cancelled) setUserRoleName(group.name);
+            return;
+          }
+        }
+        if (!cancelled) setUserRoleName(null);
+      } catch {
+        // Silent — role badge is a supplementary display
+      }
+    };
+    resolveUserRole();
+    return () => { cancelled = true; };
+  }, [user.orgId, user.id, user.email]);
 
 
   // Toggle dropdown visibility
@@ -4113,6 +4152,14 @@ const SpeechRecognition =
     >
       <header className="bg-white p-3 shadow-sm">
         <div className="flex justify-end items-center gap-2 max-w-screen-xl mx-auto">
+          {/* Role badge — the group the logged-in user's email belongs to */}
+          {userRoleName && (
+            <span className="flex items-center gap-1.5 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-md">
+              <Users className="w-3.5 h-3.5" />
+              {userRoleName}
+            </span>
+          )}
+
           {/* Language Selector */}
           <LanguageSelector />
 

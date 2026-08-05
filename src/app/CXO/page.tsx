@@ -110,6 +110,7 @@ export default function CXO() {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [orgLogoUrl, setOrgLogoUrl] = useState<string | null>(null);
+  const [orgId, setOrgId] = useState<number | null>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
 
   const [userData, setUserData] = useState<UserData>({
@@ -325,22 +326,35 @@ export default function CXO() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isMounted]);
 
+  // Resolve org_id from session (logo is organization-scoped — shared across every
+  // member of the org — see /api/org-logo/*, which replaces the old per-user /api/logo/*).
   useEffect(() => {
     if (!isMounted || !userData.userId) return;
+    try {
+      const sd = sessionStorage.getItem('currentUserData');
+      const d = sd ? JSON.parse(sd) : {};
+      const id = d.orgId ?? d.org_id ?? d.organizationId ?? d.organization_id;
+      if (id) { setOrgId(Number(id)); return; }
+    } catch { /* ignore */ }
+    setOrgId(0);
+  }, [isMounted, userData.userId]);
+
+  useEffect(() => {
+    if (!isMounted || !orgId || orgId <= 0) return;
     const fetchOrgLogo = async () => {
       try {
-        const cached = localStorage.getItem(`logo_cache_${userData.userId}`);
+        const cached = localStorage.getItem(`org_logo_cache_${orgId}`);
         if (cached) {
           const d = JSON.parse(cached);
-          if (d.userId === userData.userId && d.localUrl) setOrgLogoUrl(d.localUrl);
+          if (d.orgId === orgId && d.localUrl) setOrgLogoUrl(d.localUrl);
         }
-        const metaRes = await fetch(`${API_BASE_URL}/api/logo/${userData.userId}`, {
+        const metaRes = await fetch(`${API_BASE_URL}/api/org-logo/${orgId}`, {
           headers: { Accept: 'application/json', 'X-API-Key': EXCEL_API_KEY },
         });
         if (!metaRes.ok) return;
         const meta = await metaRes.json();
         if (meta?.success !== true || meta?.logo == null) return;
-        const blobRes = await fetch(`${API_BASE_URL}/api/logo/${userData.userId}/view`, {
+        const blobRes = await fetch(`${API_BASE_URL}/api/org-logo/${orgId}/view`, {
           headers: { 'X-API-Key': EXCEL_API_KEY },
         });
         if (blobRes.ok) {
@@ -350,7 +364,7 @@ export default function CXO() {
       } catch { /* keep cached */ }
     };
     fetchOrgLogo();
-  }, [isMounted, userData.userId]);
+  }, [isMounted, orgId]);
 
   const handleRunPrompt = async () => {
     setIsLoading(true);
@@ -951,7 +965,7 @@ export default function CXO() {
             return (
               <>
                 {/* ── Dashboard ── */}
-                {dashboardVisible && (
+                {/* {dashboardVisible && (
                   <button
                     onClick={() => setCxoView("dashboard")}
                     title="Dashboard"
@@ -961,7 +975,7 @@ export default function CXO() {
                     <LayoutDashboard className="w-4 h-4 flex-shrink-0" />
                     {!isSidebarCollapsed && <span className="ml-0.5">{hl("Dashboard")}</span>}
                   </button>
-                )}
+                )} */}
 
                 {/* ── Live Data ── */}
                 {liveDataVisible && (
@@ -977,7 +991,7 @@ export default function CXO() {
                 )}
 
                 {/* ── Demo Reference ── */}
-                {demoSectionVisible && (
+                {/* {demoSectionVisible && (
                   <div>
                     <button
                       onClick={toggleDemoRef}
@@ -1033,7 +1047,7 @@ export default function CXO() {
                       </div>
                     )}
                   </div>
-                )}
+                )} */}
 
                 {/* ── Mainboards (tree) ── */}
                 {navFiltered.map(item => {
@@ -1254,7 +1268,7 @@ export default function CXO() {
                 <div className="grid grid-cols-4 gap-4 pb-3">
 
                   {/* Dashboard */}
-                  {!hideUsRestrictedTabs && (
+                  {/* {!hideUsRestrictedTabs && (
                     <button
                       onClick={() => setCxoView("dashboard")}
                       className="bg-white border border-gray-200 rounded-xl p-6 flex flex-col items-center gap-3 hover:shadow-md hover:border-teal-200 transition-all w-full"
@@ -1264,7 +1278,7 @@ export default function CXO() {
                       </div>
                       <span className="text-sm font-semibold text-center text-teal-500">Dashboard</span>
                     </button>
-                  )}
+                  )} */}
 
                   {/* Live Data */}
                   {!hideUsRestrictedTabs && (
