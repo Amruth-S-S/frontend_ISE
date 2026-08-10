@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ensureLongFetchTimeouts } from '../undiciTimeout';
 
 const TALLY_BASE = process.env.NEXT_PUBLIC_TALLY_API_BASE_URL || '';
+const TALLY_API_KEY = process.env.TALLY_API_KEY || '';
 ensureLongFetchTimeouts();
 
 // Large XML uploads can take a while — same reasoning as the extract routes.
@@ -12,7 +13,7 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const res = await fetch(`${TALLY_BASE}/upload_gcs`, {
       method: 'POST',
-      headers: { Accept: 'application/json' },
+      headers: { Accept: 'application/json', 'X-API-Key': TALLY_API_KEY },
       body: formData,
       signal: AbortSignal.timeout(40 * 60 * 1000), // 40 minutes — large files take a while
     });

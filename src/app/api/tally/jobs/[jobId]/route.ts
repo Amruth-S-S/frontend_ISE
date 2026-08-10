@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const TALLY_BASE = process.env.NEXT_PUBLIC_TALLY_API_BASE_URL || '';
+const TALLY_API_KEY = process.env.TALLY_API_KEY || '';
 
 // Poll this after submitting any /api/tally/extract/* job.
 // Returns { status: "running" | "done" | "error", result, error }.
@@ -8,7 +9,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ job
   const { jobId } = await params;
   try {
     const res = await fetch(`${TALLY_BASE}/jobs/${encodeURIComponent(jobId)}`, {
-      headers: { Accept: 'application/json' },
+      headers: { Accept: 'application/json', 'X-API-Key': TALLY_API_KEY },
       signal: AbortSignal.timeout(30 * 1000),
     });
     const text = await res.text();

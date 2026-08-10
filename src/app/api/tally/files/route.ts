@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const TALLY_BASE = process.env.NEXT_PUBLIC_TALLY_API_BASE_URL || '';
+const TALLY_API_KEY = process.env.TALLY_API_KEY || '';
 
 export async function GET(req: NextRequest) {
   try {
     const prefix = req.nextUrl.searchParams.get('prefix') || '';
     const url = prefix ? `${TALLY_BASE}/files?prefix=${encodeURIComponent(prefix)}` : `${TALLY_BASE}/files`;
-    const res = await fetch(url, { headers: { Accept: 'application/json' } });
+    const res = await fetch(url, { headers: { Accept: 'application/json', 'X-API-Key': TALLY_API_KEY } });
     const data = await res.json();
     return NextResponse.json(data, { status: res.status });
   } catch (err) {

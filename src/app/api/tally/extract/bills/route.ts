@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const TALLY_BASE = process.env.NEXT_PUBLIC_TALLY_API_BASE_URL || '';
+const TALLY_API_KEY = process.env.TALLY_API_KEY || '';
 
 // The backend starts extraction in the background and responds immediately
 // with { job_id, status: "running", ... } — poll /api/tally/jobs/[jobId]
@@ -11,7 +12,7 @@ export async function GET(req: NextRequest) {
     const fileName = req.nextUrl.searchParams.get('file_name') || '';
     const params = new URLSearchParams({ source, file_name: fileName });
     const res = await fetch(`${TALLY_BASE}/extract/bills?${params.toString()}`, {
-      headers: { Accept: 'application/json' },
+      headers: { Accept: 'application/json', 'X-API-Key': TALLY_API_KEY },
       signal: AbortSignal.timeout(30 * 1000),
     });
     const text = await res.text();
