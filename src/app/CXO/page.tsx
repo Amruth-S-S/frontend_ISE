@@ -1132,7 +1132,7 @@ export default function CXO() {
             >
               {t('header.home')}
             </button>
-            <a href="/Consultant" className="block py-2 px-3 text-blue-600 text-sm hover:bg-gray-300 rounded">{t('header.consultant')}</a>
+            <a href="/Container" className="block py-2 px-3 text-blue-600 text-sm hover:bg-gray-300 rounded">{t('header.consultant')}</a>
             <button onClick={handleLogout} className="w-full py-2 px-3 bg-blue-600 hover:bg-red-500 rounded text-white text-sm text-left">{t('header.logout')}</button>
           </nav>
         </div>
@@ -1148,7 +1148,7 @@ export default function CXO() {
 
           {/* Nav — centered */}
           <div className="flex-1 flex justify-center gap-8">
-            <a href="/Consultant" className="text-blue-500 text-sm font-medium hover:text-blue-700 transition-colors">{t('header.consultant')}</a>
+            <a href="/Container" className="text-blue-500 text-sm font-medium hover:text-blue-700 transition-colors">{t('header.consultant')}</a>
             <a href="/CXO" className="text-blue-500 text-sm font-medium hover:text-blue-700 transition-colors">{t('header.cxo')}</a>
           </div>
 
@@ -1361,8 +1361,8 @@ export default function CXO() {
             {/* Replicate header */}
             <header className="bg-white shadow-md px-5 py-2.5 flex items-center gap-4 w-full z-30 flex-shrink-0">
               <div className="flex-1 flex justify-center gap-8">
-                <a href="/Consultant" className="text-blue-500 text-sm font-medium hover:text-blue-700">Consultant</a>
-                <a href="/CXO" className="text-blue-500 text-sm font-medium hover:text-blue-700">CXO</a>
+                <a href="/Container" className="text-blue-500 text-sm font-medium hover:text-blue-700">{t('header.consultant')}</a>
+                <a href="/CXO" className="text-blue-500 text-sm font-medium hover:text-blue-700">{t('header.cxo')}</a>
               </div>
               <div className="flex items-center gap-3 flex-shrink-0">
                 <div className="text-right hidden sm:block">
@@ -1398,7 +1398,12 @@ export default function CXO() {
                   {selectedMainBoard && (
                     <>
                       <ChevronRight className="w-3 h-3" />
-                      <span className="text-gray-600 font-medium">{selectedMainBoard.name}</span>
+                      <span
+                        onClick={handleCloseBoardModal}
+                        className="text-blue-500 hover:underline cursor-pointer font-medium"
+                      >
+                        {selectedMainBoard.name}
+                      </span>
                     </>
                   )}
                   {selectedBoardId && selectedMainBoard?.boards[selectedBoardId] && (
