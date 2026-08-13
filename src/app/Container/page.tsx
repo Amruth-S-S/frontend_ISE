@@ -4424,7 +4424,7 @@ const SpeechRecognition =
               )}
 
               {/* Desktop: horizontal tabs */}
-              <div className="hidden md:flex gap-1 p-1 bg-gray-100 rounded-lg overflow-x-auto">
+              <div className="hidden md:flex gap-1 p-1 bg-gray-100 rounded-lg overflow-x-auto scrollbar-hide">
                 {[
                   { key: "tables",        label: t("tabs.manageTables") },
                   { key: "documentation", label: t("tabs.aiDocumentation") },

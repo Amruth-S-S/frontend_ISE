@@ -4243,7 +4243,7 @@ const SpeechRecognition =
               )}
 
               {/* Desktop: horizontal tabs */}
-              <div className="hidden md:flex gap-1 p-1 bg-gray-100 rounded-lg overflow-x-auto">
+              <div className="hidden md:flex gap-1 p-1 bg-gray-100 rounded-lg overflow-x-auto scrollbar-hide">
                 {[
                   { key: "tables",        label: t("tabs.manageTables") },
                   { key: "documentation", label: t("tabs.aiDocumentation") },
@@ -4348,9 +4348,9 @@ const SpeechRecognition =
         {activeTab === "prompts" && (
           <div className="w-full">
             {/* Header */}
-            <div className="w-full bg-white border-b">
+            <div className="w-full">
               <div className="max-w-[1400px] mx-auto px-3 py-2">
-                <div className="flex flex-row flex-nowrap gap-2 items-center overflow-x-auto">
+                <div className="flex flex-row flex-nowrap gap-2 items-center overflow-x-auto p-1">
 
                   {/* Search */}
                   <div className="relative flex-1 min-w-[120px]">
@@ -4731,7 +4731,7 @@ const SpeechRecognition =
         {activeTab === "repository" && (
           <div className="w-full">
             {/* Search bar */}
-            <div className="w-full bg-white border-b">
+            <div className="w-full">
               <div className="max-w-[1400px] mx-auto px-3 py-2">
                 <div className="relative">
                   <input
@@ -5616,7 +5616,7 @@ const SpeechRecognition =
         {isLoading && <Spinner />}
 
         {activeTab === "tables" && (
-          <div className="p-2 sm:p-4">
+          <div className="max-w-[1400px] mx-auto px-3 py-2 sm:py-4">
             {/* Header */}
             <div className="flex flex-col gap-2 mb-3 sm:flex-row sm:justify-between sm:items-center sm:mb-4">
               {/* Title + slot indicators */}
@@ -5688,8 +5688,8 @@ const SpeechRecognition =
                         <th className="px-2 py-2 text-left text-xs font-medium text-gray-600 uppercase w-10">Slot</th>
                         <th className="px-2 py-2 text-left text-xs font-medium text-gray-600 uppercase">Name</th>
                         <th className="px-2 py-2 text-left text-xs font-medium text-gray-600 uppercase hidden sm:table-cell">Description</th>
-                        <th className="px-2 py-2 text-left text-xs font-medium text-gray-600 uppercase w-16">Type</th>
-                        <th className="px-2 py-2 text-left text-xs font-medium text-gray-600 uppercase w-16">Status</th>
+                        <th className="px-2 py-2 text-left text-xs font-medium text-gray-600 uppercase whitespace-nowrap">Type</th>
+                        <th className="px-2 py-2 text-left text-xs font-medium text-gray-600 uppercase w-20">Status</th>
                         <th className="px-2 py-2 text-center text-xs font-medium text-gray-600 uppercase">Actions</th>
                       </tr>
                     </thead>
@@ -5716,16 +5716,16 @@ const SpeechRecognition =
                               <td className="px-2 py-2 text-xs text-gray-600 max-w-[120px] truncate hidden sm:table-cell" title={source.description}>
                                 {source.description || "—"}
                               </td>
-                              <td className="px-2 py-2">
-                                <span className={`px-1.5 py-0.5 text-xs font-semibold rounded-full ${source.source_type === "table_data"
+                              <td className="px-2 py-2 whitespace-nowrap">
+                                <span className={`px-1.5 py-0.5 text-xs font-semibold rounded-full whitespace-nowrap ${source.source_type === "table_data"
                                   ? "bg-purple-100 text-purple-700"
                                   : "bg-green-100 text-green-700"
                                   }`}>
                                   {source.source_type_display}
                                 </span>
                               </td>
-                              <td className="px-2 py-2">
-                                <span className="px-1.5 py-0.5 text-xs font-semibold rounded-full bg-green-100 text-green-700">
+                              <td className="px-2 py-2 whitespace-nowrap">
+                                <span className="px-1.5 py-0.5 text-xs font-semibold rounded-full bg-green-100 text-green-700 whitespace-nowrap">
                                   Active
                                 </span>
                               </td>
@@ -5835,13 +5835,13 @@ const SpeechRecognition =
                                 <td className="px-2 py-2 text-xs text-gray-600 max-w-[120px] truncate hidden sm:table-cell" title={row.table_description}>
                                   {row.table_description}
                                 </td>
-                                <td className="px-2 py-2">
-                                  <span className="px-1.5 py-0.5 text-xs font-semibold rounded-full bg-green-100 text-green-700">
+                                <td className="px-2 py-2 whitespace-nowrap">
+                                  <span className="px-1.5 py-0.5 text-xs font-semibold rounded-full bg-green-100 text-green-700 whitespace-nowrap">
                                     CSV
                                   </span>
                                 </td>
-                                <td className="px-2 py-2">
-                                  <span className="px-1.5 py-0.5 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-700">
+                                <td className="px-2 py-2 whitespace-nowrap">
+                                  <span className="px-1.5 py-0.5 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-700 whitespace-nowrap">
                                     Pending
                                   </span>
                                 </td>

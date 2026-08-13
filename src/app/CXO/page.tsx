@@ -982,9 +982,9 @@ export default function CXO() {
                   <button
                     onClick={() => setCxoView("livedata")}
                     title="Live Data"
-                    className={`w-full flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium transition-colors ${cxoView === "livedata" ? "bg-blue-500 text-white" : "text-gray-700 hover:bg-blue-100"}`}
+                    className={`w-full flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium transition-colors ${isSidebarCollapsed ? 'justify-center' : ''} ${cxoView === "livedata" ? "bg-blue-500 text-white" : "text-gray-700 hover:bg-blue-100"}`}
                   >
-                    <span className="w-3 h-3 flex-shrink-0" />
+                    {!isSidebarCollapsed && <span className="w-3 h-3 flex-shrink-0" />}
                     <Database className="w-4 h-4 flex-shrink-0" />
                     {!isSidebarCollapsed && <span className="ml-0.5">{hl("Live Data")}</span>}
                   </button>
@@ -1065,9 +1065,11 @@ export default function CXO() {
                       <button
                         onClick={() => setActiveMainBoardInSidebar(prev => prev === mbId ? null : mbId)}
                         title={item.name}
-                        className={`w-full flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium transition-colors ${isExpMb ? "bg-blue-500 text-white" : "text-gray-700 hover:bg-blue-100"}`}
+                        className={`w-full flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium transition-colors ${isSidebarCollapsed ? 'justify-center' : ''} ${isExpMb ? "bg-blue-500 text-white" : "text-gray-700 hover:bg-blue-100"}`}
                       >
-                        <ChevronRight className={`w-3 h-3 flex-shrink-0 transition-transform duration-200 ${isExpMb ? "rotate-90" : ""}`} />
+                        {!isSidebarCollapsed && (
+                          <ChevronRight className={`w-3 h-3 flex-shrink-0 transition-transform duration-200 ${isExpMb ? "rotate-90" : ""}`} />
+                        )}
                         <BarChart2 className="w-4 h-4 flex-shrink-0" />
                         {!isSidebarCollapsed && <span className="ml-0.5 truncate">{hl(boardNameMap[item.name] || item.name)}</span>}
                       </button>
@@ -1096,19 +1098,6 @@ export default function CXO() {
           })()}
 
         </nav>
-
-        {/* User info at bottom */}
-        {!isSidebarCollapsed && (
-          <div className="px-3 py-3 border-t border-gray-100 flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
-              <span className="text-white text-xs font-bold">{userData.userName?.charAt(0).toUpperCase() || 'U'}</span>
-            </div>
-            <div className="overflow-hidden">
-              <p className="text-xs font-semibold text-gray-800 truncate">{userData.userName || 'User'}</p>
-              <p className="text-[10px] text-gray-500 truncate">{userData.email}</p>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Mobile sidebar overlay */}
@@ -1264,8 +1253,16 @@ export default function CXO() {
                 </>
 
               ) : (
-                /* ── Combined home: all tiles in one flat 4-column grid ── */
-                <div className="grid grid-cols-4 gap-4 pb-3">
+                <>
+                  <div className="mb-6">
+                    <h1 className="text-2xl font-bold text-gray-900 mb-1">
+                      Welcome back, {t('header.cxoRole')}
+                    </h1>
+                    <p className="text-sm text-gray-500">Pick a board below to continue your work.</p>
+                  </div>
+
+                  {/* ── Combined home: all tiles in one flat 4-column grid ── */}
+                  <div className="grid grid-cols-4 gap-4 pb-3">
 
                   {/* Dashboard */}
                   {/* {!hideUsRestrictedTabs && (
@@ -1329,7 +1326,8 @@ export default function CXO() {
                     })
                   )}
 
-                </div>
+                  </div>
+                </>
               )}
             </div>
           )}
@@ -1341,19 +1339,19 @@ export default function CXO() {
         <div className="fixed inset-0 z-50 flex">
 
           {/* Replicate sidebar */}
-           <div className="hidden md:flex flex-col items-start w-28 bg-gray-200 flex-shrink-0 pt-2 pb-4 gap-1 px-2">
-  <div className="w-full h-12 flex items-center justify-center">
-    {orgLogoUrl ? (
-      <img
-        src={orgLogoUrl}
-        alt="Logo"
-        className="max-h-10 object-contain"
-      />
-    ) : (
-      <div className="h-10 w-full bg-gray-300 animate-pulse rounded"></div>
-    )}
-  </div>
-</div>
+          <div className="hidden md:flex flex-col items-center w-28 bg-white border-r border-gray-200 shadow-sm flex-shrink-0 pt-3 pb-4 px-3">
+            <div className="w-full flex items-center justify-center pb-3 mb-1 border-b border-gray-100">
+              {orgLogoUrl ? (
+                <img
+                  src={orgLogoUrl}
+                  alt="Logo"
+                  className="max-h-10 object-contain"
+                />
+              ) : (
+                <div className="h-10 w-full bg-gray-100 animate-pulse rounded-lg"></div>
+              )}
+            </div>
+          </div>
 
           {/* Main panel */}
           <div className="flex-1 flex flex-col bg-gray-100 overflow-hidden">
