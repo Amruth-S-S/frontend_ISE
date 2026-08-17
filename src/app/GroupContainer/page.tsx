@@ -14,7 +14,7 @@ import { useLanguage } from "../context/LanguageContext";
 import { translateBatch, translateText, formatNumber } from "../utils/translateService";
 // import { MdManageSearch } from "react-icons/md";
 import { FaPlay, FaPen, FaTrash, FaEdit, FaCheck, FaBan } from "react-icons/fa";
-import { FaFileUpload, FaCaretUp, FaCaretDown, FaUpload, FaTimes, FaComment, FaBars } from 'react-icons/fa';
+import { FaFileUpload, FaCaretUp, FaCaretDown, FaUpload, FaTimes, FaComment, FaBars, FaSearch } from 'react-icons/fa';
 import axios from "axios";
 import React from "react";
 import { saveAs } from 'file-saver';
@@ -260,6 +260,7 @@ function GroupContainerPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [tableSortCol, setTableSortCol] = useState<number | null>(null);
   const [tableSortDir, setTableSortDir] = useState<'asc' | 'desc'>('asc');
+  const [resultTableSearch, setResultTableSearch] = useState('');
   const [colWidths, setColWidths] = useState<number[]>([]);
   const [view,] = useState("manage-tables");
   const [isRunClicked, setIsRunClicked] = useState(false);
@@ -2983,7 +2984,11 @@ useEffect(() => {
 
   // Sorted table rows derived from runResult (or translated version)
   const sortedTableData = (() => {
-    const rows = (translatedResultData.length > 0 ? translatedResultData : runResult?.table?.data) ?? [];
+    let rows = (translatedResultData.length > 0 ? translatedResultData : runResult?.table?.data) ?? [];
+    const q = resultTableSearch.trim().toLowerCase();
+    if (q) {
+      rows = rows.filter((row: any[]) => row.some(cell => String(cell ?? '').toLowerCase().includes(q)));
+    }
     if (tableSortCol === null) return rows;
     return [...rows].sort((a, b) => {
       const av = a[tableSortCol] ?? '';
@@ -3355,7 +3360,7 @@ const SpeechRecognition =
 
       if (response?.data) {
         setRunResult(response.data);
-        setTableSortCol(null); setTableSortDir('asc'); setColWidths([]);
+        setTableSortCol(null); setTableSortDir('asc'); setColWidths([]); setResultTableSearch('');
 
       if (promptId) {
   const hasCharts = (response.data.charts ?? []).length > 0;
@@ -3511,7 +3516,7 @@ const SpeechRecognition =
       if (response?.data) {
         // console.log("Prompt run successfully:", response.data);
         setRunResult(response.data); // Set the result to display it
-        setTableSortCol(null); setTableSortDir('asc'); setColWidths([]);
+        setTableSortCol(null); setTableSortDir('asc'); setColWidths([]); setResultTableSearch('');
 
         const hasCharts = (response.data.charts ?? []).length > 0;
         const hasTable = response.data.table?.columns?.length > 0;
@@ -5030,6 +5035,28 @@ const SpeechRecognition =
                           );
                         })}
                       </div>
+
+                      {resultTab === 'table' && runResult?.table && runResult.table.columns?.length > 0 && (
+                        <div className="relative flex-1 min-w-[160px] max-w-md">
+                          <FaSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={12} />
+                          <input
+                            type="text"
+                            value={resultTableSearch}
+                            onChange={(e) => setResultTableSearch(e.target.value)}
+                            placeholder="Search table…"
+                            className="w-full pl-8 pr-8 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
+                          />
+                          {resultTableSearch && (
+                            <button
+                              onClick={() => setResultTableSearch('')}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                            >
+                              <FaTimes size={11} />
+                            </button>
+                          )}
+                        </div>
+                      )}
+
                       <div className="flex gap-2">
                         {resultTab === 'table' && runResult?.table && runResult.table.columns?.length > 0 && (
                           <button
@@ -6932,6 +6959,28 @@ const SpeechRecognition =
                         </button>
                       );
                     })}
+
+                    {resultTab === 'table' && runResult?.table && runResult.table.columns?.length > 0 && (
+                      <div className="relative flex-1 min-w-[140px] max-w-sm">
+                        <FaSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={11} />
+                        <input
+                          type="text"
+                          value={resultTableSearch}
+                          onChange={(e) => setResultTableSearch(e.target.value)}
+                          placeholder="Search table…"
+                          className="w-full pl-8 pr-7 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
+                        />
+                        {resultTableSearch && (
+                          <button
+                            onClick={() => setResultTableSearch('')}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                          >
+                            <FaTimes size={10} />
+                          </button>
+                        )}
+                      </div>
+                    )}
+
                     <div className="ml-auto flex gap-2">
                       {resultTab === 'table' && runResult?.table && runResult.table.columns?.length > 0 && (
                         <button
