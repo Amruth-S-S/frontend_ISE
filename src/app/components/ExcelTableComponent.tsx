@@ -77,6 +77,11 @@ const ExcelTableComponent = ({ boardId }: ExcelTableComponentProps) => {
   const [tablesLoading, setTablesLoading] = useState(false);
   const [org, setOrg] = useState<OrgSummary | null>(null);
   const [orgLoading, setOrgLoading] = useState(false);
+  const [orgId, setOrgId] = useState<number | null>(null);
+  const [orgRole, setOrgRole] = useState<string>('');
+  const [showLogoModal, setShowLogoModal] = useState(false);
+  const [selectedLogoFile, setSelectedLogoFile] = useState<File | null>(null);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [expandedTableId, setExpandedTableId] = useState<string | null>(null);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -215,6 +220,74 @@ const ExcelTableComponent = ({ boardId }: ExcelTableComponentProps) => {
     };
     fetchOrg();
   }, [loggedInUserId]);
+
+  // orgId/orgRole — needed for the logo-upload permission check and API calls below.
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("currentUserData");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.orgId) setOrgId(Number(parsed.orgId));
+        if (parsed.orgRole) setOrgRole(parsed.orgRole);
+      }
+    } catch {}
+  }, []);
+
+  // Logo is organization-scoped (shared across every member of the org) — see
+  // /api/org-logo/*. Upload is OWNER/SUPER_ADMIN only (also enforced server-side).
+  const canManageOrgLogo = orgRole === 'OWNER' || orgRole === 'SUPER_ADMIN';
+
+  const handleLogoFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) setSelectedLogoFile(file);
+  };
+
+  const handleLogoCancel = () => { setShowLogoModal(false); setSelectedLogoFile(null); };
+
+  const handleLogoSubmit = async () => {
+    if (!canManageOrgLogo) { showToast('Only the org Owner or Super Admin can update the logo.', 'error'); return; }
+    if (!selectedLogoFile) { showToast('Please select a file', 'error'); return; }
+    if (!loggedInUserId) { showToast('User not found. Please log in again.', 'error'); return; }
+    if (!orgId || orgId <= 0) { showToast('Could not determine your organization. Please reload and try again.', 'error'); return; }
+
+    setIsUploadingLogo(true);
+    try {
+      const localUrl = await new Promise<string>(resolve => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target?.result as string);
+        reader.readAsDataURL(selectedLogoFile);
+      });
+
+      const formData = new FormData();
+      formData.append('file', selectedLogoFile);
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/org-logo/upload/${orgId}?uploaded_by_user_id=${loggedInUserId}`,
+        { method: 'POST', headers: { 'X-API-Key': API_KEY }, body: formData },
+      );
+
+      if (response.ok) {
+        showToast('Logo updated successfully!', 'success');
+        handleLogoCancel();
+        // Cache locally (same key Sidebar reads) and tell the sidebar to refresh
+        // its own copy — they're separate component instances with no shared state.
+        localStorage.setItem(`org_logo_cache_${orgId}`, JSON.stringify({
+          localUrl,
+          filename: selectedLogoFile.name,
+          uploadDate: new Date().toISOString(),
+          orgId,
+        }));
+        window.dispatchEvent(new Event('org-logo-updated'));
+      } else {
+        const err = await response.json().catch(() => ({}));
+        showToast(err.detail || err.message || 'Upload failed. Please try again.', 'error');
+      }
+    } catch {
+      showToast('Network error. Please check your connection.', 'error');
+    } finally {
+      setIsUploadingLogo(false);
+    }
+  };
 
   useEffect(() => {
     if (editingCell && cellInputRef.current) {
@@ -1079,20 +1152,70 @@ const ExcelTableComponent = ({ boardId }: ExcelTableComponentProps) => {
               <p className="text-xs text-gray-500">Custom master data tables for this board</p>
             </div>
           </div>
-          <button
-            onClick={() => !isViewer && openCreateModal()}
-            disabled={isViewer || !boardId || !loggedInUserId || tables.length > 0}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium shadow-sm transition-colors flex-shrink-0 ${
-              isViewer || !boardId || !loggedInUserId || tables.length > 0
-                ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                : "bg-blue-600 text-white hover:bg-blue-700"
-            }`}
-            title={isViewer ? "View only" : tables.length > 0 ? "Delete the existing table to create a new one" : undefined}
-          >
-            <Plus className="w-4 h-4" />
-            {!boardId ? "Select Board First" : "Create Master Data"}
-          </button>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {canManageOrgLogo && (
+              <button
+                onClick={() => setShowLogoModal(true)}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium shadow-sm transition-colors bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-800"
+              >
+                <Upload className="w-4 h-4" />
+                Upload Logo
+              </button>
+            )}
+            <button
+              onClick={() => !isViewer && openCreateModal()}
+              disabled={isViewer || !boardId || !loggedInUserId || tables.length > 0}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium shadow-sm transition-colors ${
+                isViewer || !boardId || !loggedInUserId || tables.length > 0
+                  ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                  : "bg-blue-600 text-white hover:bg-blue-700"
+              }`}
+              title={isViewer ? "View only" : tables.length > 0 ? "Delete the existing table to create a new one" : undefined}
+            >
+              <Plus className="w-4 h-4" />
+              {!boardId ? "Select Board First" : "Create Master Data"}
+            </button>
+          </div>
         </div>
+
+        {/* ── Logo Upload Modal ── */}
+        {showLogoModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full mx-4 overflow-hidden">
+              <div className="flex justify-between items-center px-5 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-blue-100">
+                <h2 className="text-base font-bold text-gray-900">Upload Logo</h2>
+                <button onClick={handleLogoCancel} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="p-5 space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-2">Upload New Logo</label>
+                  <div className="border-2 border-dashed border-gray-300 rounded-xl p-5 text-center hover:border-blue-400 transition-colors bg-gray-50">
+                    <input type="file" id="master-data-logo-upload" accept="image/*" onChange={handleLogoFileChange} className="hidden" />
+                    <label htmlFor="master-data-logo-upload" className="cursor-pointer flex flex-col items-center">
+                      <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mb-2">
+                        <Upload className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <span className="text-xs font-medium text-gray-700 mb-1 w-full truncate text-center px-2" title={selectedLogoFile ? selectedLogoFile.name : undefined}>
+                        {selectedLogoFile ? selectedLogoFile.name : 'Click to upload'}
+                      </span>
+                      <span className="text-xs text-gray-500">PNG, JPG, GIF, WebP, SVG up to 5MB</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 px-5 py-3 border-t bg-gray-50">
+                <button onClick={handleLogoCancel} disabled={isUploadingLogo} className="px-4 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50">
+                  Cancel
+                </button>
+                <button onClick={handleLogoSubmit} disabled={isUploadingLogo || !selectedLogoFile} className="px-4 py-2 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5">
+                  {isUploadingLogo ? (<><div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" />Uploading...</>) : 'Submit'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── Tables list ── */}
         <div>

@@ -582,7 +582,7 @@ export default function CXO() {
     setShowBoardModal(false); setSelectedBoardId(null); setActiveTab("prompts");
     setSelectedPrompt(null); setNewPromptName(''); setIsRunClicked(false); setRunResult(null);
     setIsDemoBoard(false); setSelectedDemoBoardId(null); setDemoBoardName('');
-    setShowBoardDropdown(false);
+    setShowBoardDropdown(false); setShowPromptsModal(false);
   };
   const handleViewPromptsClick = () => setShowPromptsModal(true);
   const handleClosePromptsModal = () => { setShowPromptsModal(false); setCurrentPromptIndex(0); setSearchTerm(''); };
