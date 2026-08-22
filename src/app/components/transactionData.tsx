@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Upload, X, FolderOpen, FileSpreadsheet, PlayCircle, Loader2,
   CheckCircle2, AlertCircle, RefreshCw, Database, FileCode2, Copy, ChevronDown,
-  Search, ArrowUp, ArrowDown, ArrowUpDown,
+  Search, ArrowUp, ArrowDown, ArrowUpDown, ArrowLeft, Trash2,
 } from 'lucide-react';
 
 // The Tally → GCS → PostgreSQL extraction service (NEXT_PUBLIC_TALLY_API_BASE_URL)
@@ -130,13 +130,23 @@ export default function TransactionData() {
   };
 
   // ─── Upload modal state ─────────────────────────────────────────────────
+  // folders/foldersLoading are also shared with the List Files modal below.
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [folders, setFolders] = useState<string[]>([]);
   const [foldersLoading, setFoldersLoading] = useState(false);
-  const [selectedFolder, setSelectedFolder] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ─── List/Delete Files modal state ──────────────────────────────────────
+  // Two steps in one modal: pick a folder (from GET /List_folders), then view
+  // its files (GET /files/to_delete) with a per-file delete (DELETE /delete).
+  const [showFilesModal, setShowFilesModal] = useState(false);
+  const [filesModalFolder, setFilesModalFolder] = useState('');
+  const [filesList, setFilesList] = useState<string[] | null>(null); // null = still on the folder-picker step
+  const [filesListLoading, setFilesListLoading] = useState(false);
+  const [fileDeleteTarget, setFileDeleteTarget] = useState<string | null>(null); // pending confirmation
+  const [deletingFile, setDeletingFile] = useState<string | null>(null);
 
   // ─── Extraction tabs state ──────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<ExtractKind>('brs');
@@ -211,9 +221,7 @@ export default function TransactionData() {
   // ─── Upload modal handlers ──────────────────────────────────────────────
   const openUploadModal = () => {
     setSelectedFile(null);
-    setSelectedFolder('');
     setShowUploadModal(true);
-    fetchFolders();
   };
 
   const closeUploadModal = () => {
@@ -227,13 +235,11 @@ export default function TransactionData() {
 
   const handleUpload = async () => {
     if (!selectedFile) { showToast('error', 'Please choose a file to upload'); return; }
-    if (!selectedFolder) { showToast('error', 'Please select a destination folder'); return; }
 
     setUploading(true);
     try {
       const formData = new FormData();
       formData.append('file', selectedFile);
-      formData.append('destination_blob_name', selectedFolder);
 
       const res = await fetch('/api/tally/upload', {
         method: 'POST',
@@ -248,13 +254,73 @@ export default function TransactionData() {
       showToast('success', `Uploaded: ${data.gcs_uri || selectedFile.name}`);
       setShowUploadModal(false);
       setSelectedFile(null);
-      setSelectedFolder('');
       setActiveTab('brs');
       await refreshSourceFiles();
     } catch (e) {
       showToast('error', e instanceof Error ? e.message : 'Upload failed');
     } finally {
       setUploading(false);
+    }
+  };
+
+  // ─── List/Delete Files modal handlers ───────────────────────────────────
+  const openFilesModal = () => {
+    setFilesModalFolder('');
+    setFilesList(null);
+    setShowFilesModal(true);
+    fetchFolders();
+  };
+
+  const closeFilesModal = () => {
+    if (deletingFile) return;
+    setShowFilesModal(false);
+  };
+
+  // ─── GET /files/to_delete?prefix=... ────────────────────────────────────
+  const fetchFilesToDelete = async () => {
+    if (!filesModalFolder) { showToast('error', 'Please select a folder'); return; }
+    setFilesListLoading(true);
+    try {
+      const res = await fetch(`/api/tally/files/to-delete?prefix=${encodeURIComponent(filesModalFolder)}`, {
+        headers: { Accept: 'application/json' },
+      });
+      if (!res.ok) throw new Error(`Failed to load files (${res.status})`);
+      const data = await res.json();
+      // The endpoint returns { files_to_delete: [...] }, not a bare array.
+      const list = Array.isArray(data) ? data : Array.isArray(data?.files_to_delete) ? data.files_to_delete : [];
+      setFilesList(list);
+    } catch (e) {
+      showToast('error', e instanceof Error ? e.message : 'Failed to load files');
+    } finally {
+      setFilesListLoading(false);
+    }
+  };
+
+  const backToFolderPicker = () => setFilesList(null);
+
+  // ─── DELETE /delete?prefix=<file path> ──────────────────────────────────
+  // Destructive and irreversible — fileDeleteTarget holds the file pending the
+  // confirmation dialog below; nothing is deleted until the user confirms it.
+  const handleConfirmDelete = async () => {
+    if (!fileDeleteTarget) return;
+    const target = fileDeleteTarget;
+    setDeletingFile(target);
+    try {
+      const res = await fetch(`/api/tally/delete?prefix=${encodeURIComponent(target)}`, {
+        method: 'DELETE',
+        headers: { Accept: 'application/json' },
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || `Delete failed (${res.status})`);
+      }
+      showToast('success', 'File deleted successfully');
+      setFilesList(prev => prev ? prev.filter(f => f !== target) : prev);
+    } catch (e) {
+      showToast('error', e instanceof Error ? e.message : 'Failed to delete file');
+    } finally {
+      setDeletingFile(null);
+      setFileDeleteTarget(null);
     }
   };
 
@@ -433,13 +499,22 @@ export default function TransactionData() {
             <p className="text-xs text-gray-500">Upload Tally XML exports and run BRS, GST, Provisions, Ledger, Bills &amp; Stock extraction</p>
           </div>
         </div>
-        <button
-          onClick={openUploadModal}
-          className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg shadow-sm transition-colors flex-shrink-0"
-        >
-          <Upload className="w-4 h-4" />
-          Upload Files
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            onClick={openFilesModal}
+            className="flex items-center gap-1.5 px-4 py-2 bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-800 text-sm font-medium rounded-lg shadow-sm transition-colors"
+          >
+            <FolderOpen className="w-4 h-4" />
+            List Files
+          </button>
+          <button
+            onClick={openUploadModal}
+            className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg shadow-sm transition-colors"
+          >
+            <Upload className="w-4 h-4" />
+            Upload Files
+          </button>
+        </div>
       </div>
 
       {/* Extraction card */}
@@ -687,37 +762,6 @@ export default function TransactionData() {
                   <span className="truncate">{selectedFile ? selectedFile.name : 'Choose a file to upload'}</span>
                 </button>
               </div>
-
-              {/* Destination folder dropdown */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-semibold text-gray-700">Destination Folder</label>
-                  <button
-                    onClick={fetchFolders}
-                    disabled={foldersLoading}
-                    className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 disabled:opacity-50"
-                  >
-                    <RefreshCw className={`w-3 h-3 ${foldersLoading ? 'animate-spin' : ''}`} />
-                    Refresh
-                  </button>
-                </div>
-                <div className="relative">
-                  <select
-                    value={selectedFolder}
-                    onChange={e => setSelectedFolder(e.target.value)}
-                    disabled={foldersLoading}
-                    className="w-full appearance-none px-3 py-2 pr-8 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-gray-50"
-                  >
-                    <option value="">
-                      {foldersLoading ? 'Loading folders…' : folders.length === 0 ? 'No folders found' : 'Select a folder'}
-                    </option>
-                    {folders.map(f => (
-                      <option key={f} value={f}>{f}</option>
-                    ))}
-                  </select>
-                  <FolderOpen className="w-4 h-4 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                </div>
-              </div>
             </div>
 
             <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100 bg-gray-50">
@@ -730,11 +774,162 @@ export default function TransactionData() {
               </button>
               <button
                 onClick={handleUpload}
-                disabled={uploading || !selectedFile || !selectedFolder}
+                disabled={uploading || !selectedFile}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
               >
                 {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
                 Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* List/Delete Files modal */}
+      {showFilesModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[90] p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                {filesList !== null && (
+                  <button onClick={backToFolderPicker} className="text-gray-400 hover:text-gray-700 -ml-1 mr-0.5">
+                    <ArrowLeft className="w-4 h-4" />
+                  </button>
+                )}
+                <FolderOpen className="w-4 h-4 text-blue-600" />
+                {filesList !== null ? `Files in "${filesModalFolder}"` : 'List Files'}
+              </h3>
+              <button onClick={closeFilesModal} disabled={!!deletingFile} className="text-gray-400 hover:text-gray-700 disabled:opacity-40">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {filesList === null ? (
+              /* ── Step 1: pick a folder ── */
+              <>
+                <div className="p-5 space-y-4">
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-semibold text-gray-700">Folder</label>
+                      <button
+                        onClick={fetchFolders}
+                        disabled={foldersLoading}
+                        className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                      >
+                        <RefreshCw className={`w-3 h-3 ${foldersLoading ? 'animate-spin' : ''}`} />
+                        Refresh
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <select
+                        value={filesModalFolder}
+                        onChange={e => setFilesModalFolder(e.target.value)}
+                        disabled={foldersLoading}
+                        className="w-full appearance-none px-3 py-2 pr-8 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-gray-50"
+                      >
+                        <option value="">
+                          {foldersLoading ? 'Loading folders…' : folders.length === 0 ? 'No folders found' : 'Select a folder'}
+                        </option>
+                        {folders.map(f => (
+                          <option key={f} value={f}>{f}</option>
+                        ))}
+                      </select>
+                      <FolderOpen className="w-4 h-4 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    </div>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100 bg-gray-50">
+                  <button
+                    onClick={closeFilesModal}
+                    className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={fetchFilesToDelete}
+                    disabled={filesListLoading || !filesModalFolder}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+                  >
+                    {filesListLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FolderOpen className="w-4 h-4" />}
+                    View Files
+                  </button>
+                </div>
+              </>
+            ) : (
+              /* ── Step 2: file list with per-file delete ── */
+              <>
+                <div className="max-h-96 overflow-y-auto">
+                  {filesList.length === 0 ? (
+                    <p className="text-sm text-gray-400 text-center py-10">No files found in this folder.</p>
+                  ) : (
+                    <ul className="divide-y divide-gray-100">
+                      {filesList.map(file => (
+                        <li key={file} className="flex items-center justify-between gap-3 px-5 py-2.5 hover:bg-gray-50">
+                          <span className="text-sm text-gray-700 truncate" title={file}>
+                            {file.split('/').pop() || file}
+                          </span>
+                          <button
+                            onClick={() => setFileDeleteTarget(file)}
+                            disabled={deletingFile === file}
+                            title="Delete file"
+                            className="text-red-500 hover:text-red-700 disabled:opacity-40 flex-shrink-0"
+                          >
+                            {deletingFile === file ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <div className="flex justify-between gap-2 px-5 py-4 border-t border-gray-100 bg-gray-50">
+                  <button
+                    onClick={backToFolderPicker}
+                    className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    ← Back
+                  </button>
+                  <button
+                    onClick={closeFilesModal}
+                    className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation — a destructive, irreversible action, so this must
+          be explicitly confirmed before /api/tally/delete is ever called. */}
+      {fileDeleteTarget && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden">
+            <div className="p-5">
+              <div className="flex items-center gap-2 mb-2">
+                <AlertCircle className="w-5 h-5 text-red-500" />
+                <h3 className="text-sm font-bold text-gray-800">Delete this file?</h3>
+              </div>
+              <p className="text-xs text-gray-500 break-words">
+                <span className="font-medium text-gray-700">{fileDeleteTarget.split('/').pop()}</span> will be permanently deleted. This cannot be undone.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100 bg-gray-50">
+              <button
+                onClick={() => setFileDeleteTarget(null)}
+                disabled={!!deletingFile}
+                className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={!!deletingFile}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                {deletingFile ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                Delete
               </button>
             </div>
           </div>
