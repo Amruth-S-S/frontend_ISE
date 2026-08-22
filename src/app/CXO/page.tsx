@@ -20,7 +20,7 @@ import {
 import { Bar, Line, Pie } from 'react-chartjs-2';
 import Spinner from '../components/Spinner';
 import { useRouter } from 'next/navigation';
-import { Menu, X, Settings, BarChart2, FileText, PieChart, TrendingUp, Database, Users, LayoutDashboard, BookOpen, Play, ChevronRight } from 'lucide-react';
+import { Menu, X, Settings, BarChart2, FileText, PieChart, TrendingUp, Database, Users, LayoutDashboard, BookOpen, Play, ChevronRight, ChevronUp, ChevronDown, LogOut, Eye, EyeOff, User as UserIcon } from 'lucide-react';
 import KPIDashboard from '../Dashboard/page';
 import dynamic from 'next/dynamic';
 
@@ -112,6 +112,14 @@ export default function CXO() {
   const [orgLogoUrl, setOrgLogoUrl] = useState<string | null>(null);
   const [orgId, setOrgId] = useState<number | null>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
+
+  // ── Settings / Change Password modal — opened from the account menu ──
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
   const [userData, setUserData] = useState<UserData>({
     email: "",
@@ -597,6 +605,45 @@ export default function CXO() {
       ['loggedInUserEmail','loggedInUserId','loggedInUserRole','loggedInUserName','client_user_id'].forEach(k => localStorage.removeItem(k));
     }
     router.replace('/Login');
+  };
+
+  const handleSettingsClick = () => { setShowSettingsModal(true); setShowDropdown(false); };
+
+  const handlePasswordUpdate = async () => {
+    if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
+      showToast('Please fill in all password fields', 'error'); return;
+    }
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      showToast('New password and confirm password do not match', 'error'); return;
+    }
+    if (passwordData.newPassword.length < 8) {
+      showToast('Password must be at least 8 characters long', 'error'); return;
+    }
+    setIsUpdatingPassword(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/change-password?user_id=${userData.userId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': EXCEL_API_KEY },
+        body: JSON.stringify({
+          current_password: passwordData.currentPassword,
+          new_password: passwordData.newPassword,
+          confirm_password: passwordData.confirmPassword,
+        }),
+      });
+      if (response.ok) {
+        const result = await response.json();
+        showToast(result.message || 'Password updated successfully!', 'info');
+        setShowSettingsModal(false);
+        setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      } else {
+        const errorData = await response.json();
+        showToast(errorData.message || 'Failed to update password', 'error');
+      }
+    } catch {
+      showToast('An error occurred while updating password', 'error');
+    } finally {
+      setIsUpdatingPassword(false);
+    }
   };
 
   const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
@@ -1146,29 +1193,39 @@ export default function CXO() {
             {/* Language Selector */}
             <LanguageSelector />
 
-            <div className="flex items-center gap-3" ref={dropdownRef}>
-              <div className="text-right hidden sm:block">
-                <p className="text-sm font-semibold text-gray-800 leading-tight">{userData.userName || 'User'}</p>
-                <p className="text-xs text-gray-500 leading-tight">{userData.email}</p>
-              </div>
-              <div className="relative">
-                <button
-                  onClick={() => setShowDropdown(v => !v)}
-                  className="w-9 h-9 rounded-full bg-blue-600 hover:bg-blue-700 flex items-center justify-center transition-colors"
-                >
-                  <Settings className="w-4 h-4 text-white" />
-                </button>
-                {showDropdown && (
-                  <div className="absolute right-0 top-full mt-1.5 bg-white shadow-lg rounded-md border border-gray-100 min-w-[120px] z-50">
-                    <button
-                      onClick={handleLogout}
-                      className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 rounded-md"
-                    >
-                      {t('header.logout')}
+            {/* Account menu — avatar/name pill, opens name+email+Settings+Logout */}
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={() => setShowDropdown(v => !v)}
+                className="flex items-center gap-2 pl-1.5 pr-2.5 py-1.5 rounded-full border border-gray-200 hover:bg-gray-50 transition-colors"
+              >
+                <div className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-semibold flex-shrink-0">
+                  {userData.userName ? userData.userName.charAt(0).toUpperCase() : <UserIcon className="w-3.5 h-3.5" />}
+                </div>
+                <span className="text-sm font-medium text-gray-800 hidden sm:inline">{userData.userName || 'Account'}</span>
+                {showDropdown ? <ChevronUp className="w-3.5 h-3.5 text-gray-400" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-400" />}
+              </button>
+              {showDropdown && (
+                <div className="absolute right-0 mt-2 w-72 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden">
+                  <div className="flex items-center gap-3 px-4 py-3.5">
+                    <div className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-semibold flex-shrink-0">
+                      {userData.userName ? userData.userName.charAt(0).toUpperCase() : <UserIcon className="w-4 h-4" />}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 truncate">{userData.userName || 'N/A'}</p>
+                      <p className="text-xs text-gray-500 truncate">{userData.email || 'N/A'}</p>
+                    </div>
+                  </div>
+                  <div className="border-t border-gray-100">
+                    <button onClick={handleSettingsClick} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+                      <Settings className="w-4 h-4 text-gray-500" /><span>Settings</span>
+                    </button>
+                    <button onClick={handleLogout} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 transition-colors">
+                      <LogOut className="w-4 h-4" /><span>{t('header.logout')}</span>
                     </button>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </div>
         </header>
@@ -1363,18 +1420,36 @@ export default function CXO() {
                 <a href="/CXO" className="text-blue-500 text-sm font-medium hover:text-blue-700">{t('header.cxo')}</a>
               </div>
               <div className="flex items-center gap-3 flex-shrink-0">
-                <div className="text-right hidden sm:block">
-                  <p className="text-sm font-semibold text-gray-800 leading-tight">{userData.userName || 'User'}</p>
-                  <p className="text-xs text-gray-500 leading-tight">{userData.email}</p>
-                </div>
                 <div className="relative">
-                  <button onClick={() => setShowBoardDropdown(v => !v)}
-                    className="w-9 h-9 rounded-full bg-blue-600 hover:bg-blue-700 flex items-center justify-center">
-                    <Settings className="w-4 h-4 text-white" />
+                  <button
+                    onClick={() => setShowBoardDropdown(v => !v)}
+                    className="flex items-center gap-2 pl-1.5 pr-2.5 py-1.5 rounded-full border border-gray-200 hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-semibold flex-shrink-0">
+                      {userData.userName ? userData.userName.charAt(0).toUpperCase() : <UserIcon className="w-3.5 h-3.5" />}
+                    </div>
+                    <span className="text-sm font-medium text-gray-800 hidden sm:inline">{userData.userName || 'Account'}</span>
+                    {showBoardDropdown ? <ChevronUp className="w-3.5 h-3.5 text-gray-400" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-400" />}
                   </button>
                   {showBoardDropdown && (
-                    <div className="absolute right-0 top-full mt-1.5 bg-white shadow-lg rounded-md border border-gray-100 min-w-[120px] z-[200]">
-                      <button onClick={handleLogout} className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 rounded-md">Logout</button>
+                    <div className="absolute right-0 mt-2 w-72 bg-white border border-gray-200 rounded-xl shadow-lg z-[200] overflow-hidden">
+                      <div className="flex items-center gap-3 px-4 py-3.5">
+                        <div className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-semibold flex-shrink-0">
+                          {userData.userName ? userData.userName.charAt(0).toUpperCase() : <UserIcon className="w-4 h-4" />}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-gray-900 truncate">{userData.userName || 'N/A'}</p>
+                          <p className="text-xs text-gray-500 truncate">{userData.email || 'N/A'}</p>
+                        </div>
+                      </div>
+                      <div className="border-t border-gray-100">
+                        <button onClick={() => { setShowBoardDropdown(false); handleSettingsClick(); }} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+                          <Settings className="w-4 h-4 text-gray-500" /><span>Settings</span>
+                        </button>
+                        <button onClick={handleLogout} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 transition-colors">
+                          <LogOut className="w-4 h-4" /><span>Logout</span>
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1708,6 +1783,44 @@ export default function CXO() {
             >
               Cancel
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Settings / Change Password Modal ── */}
+      {showSettingsModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[210]">
+          <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full mx-4 overflow-hidden">
+            <div className="flex justify-between items-center px-5 py-4 border-b border-gray-200">
+              <h2 className="text-base font-bold text-gray-900">Change Password</h2>
+              <button onClick={() => { setShowSettingsModal(false); setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' }); }} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all duration-200">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-3">
+              {([
+                { label: 'Current Password', key: 'currentPassword' as const, show: showCurrentPassword, toggle: () => setShowCurrentPassword(!showCurrentPassword) },
+                { label: 'New Password', key: 'newPassword' as const, show: showNewPassword, toggle: () => setShowNewPassword(!showNewPassword) },
+                { label: 'Confirm New Password', key: 'confirmPassword' as const, show: showConfirmPassword, toggle: () => setShowConfirmPassword(!showConfirmPassword) },
+              ]).map(({ label, key, show, toggle }) => (
+                <div key={key}>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">{label}</label>
+                  <div className="relative">
+                    <input type={show ? "text" : "password"} value={passwordData[key]} onChange={e => setPasswordData({ ...passwordData, [key]: e.target.value })}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 pr-9" placeholder={`Enter ${label.toLowerCase()}`} />
+                    <button type="button" onClick={toggle} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700">
+                      {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-3 border-t bg-gray-50">
+              <button onClick={() => { setShowSettingsModal(false); setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' }); }} disabled={isUpdatingPassword} className="px-4 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50">Cancel</button>
+              <button onClick={handlePasswordUpdate} disabled={isUpdatingPassword} className="px-4 py-2 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5">
+                {isUpdatingPassword ? (<><div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" />Updating...</>) : 'Update Password'}
+              </button>
+            </div>
           </div>
         </div>
       )}

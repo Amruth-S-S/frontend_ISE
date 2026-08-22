@@ -9,6 +9,7 @@ import Link from 'next/link';
 import {
   LayoutDashboard,
   ChevronDown,
+  ChevronUp,
   ChevronRight,
   Plus,
   Edit2,
@@ -145,7 +146,6 @@ const Sidebar: React.FC<SidebarProps> = ({ }) => {
   const [showSubMenu, setShowSubMenu] = useState(false);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [newCollectionName, setNewCollectionName] = useState('');
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   // Mobile
   const [isMobile, setIsMobile] = useState(false);
@@ -153,14 +153,6 @@ const Sidebar: React.FC<SidebarProps> = ({ }) => {
 
   // Logo — display only here; uploading now happens from the Master Data tab.
   const [currentLogo, setCurrentLogo] = useState<string | null>(null);
-
-  // Settings / Password
-  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
-const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
   const [clientUserId, setClientUserId] = useState<string | null>(null);
   const [loadingMainBoard, setLoadingMainBoard] = useState<string | null>(null);
@@ -202,7 +194,6 @@ const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassw
 
   const [deletingBoards, setDeletingBoards] = useState<{ [key: string]: boolean }>({});
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
-  const [showUserDropdown, setShowUserDropdown] = useState(false);
 
   // Org id — resolved once for the OWNER, needed for the /rbac/main-boards and
   // /rbac/boards endpoints which require org_id on every call.
@@ -212,7 +203,6 @@ const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassw
   const [groupRefItems, setGroupRefItems] = useState<MainBoard[]>([]);
   const [groupRefLoading, setGroupRefLoading] = useState(false);
   const [activeGroupRefMainBoard, setActiveGroupRefMainBoard] = useState<string | null>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
   const [userData, setUserData] = useState<UserData>({ email: "", userId: "", userRole: "", userName: "" });
   const [isMounted, setIsMounted] = useState(false);
 
@@ -225,8 +215,6 @@ const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassw
 
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
   const EXCEL_API_KEY = process.env.NEXT_PUBLIC_API_KEY || '';
-
-  const toggleDropdown = () => setIsDropdownOpen(!isDropdownOpen);
 
   const fetchCustomerDbKeys = async () => {
   try {
@@ -265,46 +253,6 @@ const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassw
     setCustomerDbOptions([FALLBACK_CUSTOMER_DB_KEY]);
   }
 };
-
-  // ─── Password Update ──────────────────────────────────────────────────────────
-  const handlePasswordUpdate = async () => {
-    if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
-      toast.error('Please fill in all password fields'); return;
-    }
-    if (passwordData.newPassword !== passwordData.confirmPassword) {
-      toast.error('New password and confirm password do not match'); return;
-    }
-    if (passwordData.newPassword.length < 8) {
-      toast.error('Password must be at least 8 characters long'); return;
-    }
-    setIsUpdatingPassword(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/auth/change-password?user_id=${userData.userId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-API-Key': EXCEL_API_KEY },
-        body: JSON.stringify({
-          current_password: passwordData.currentPassword,
-          new_password: passwordData.newPassword,
-          confirm_password: passwordData.confirmPassword,
-        }),
-      });
-      if (response.ok) {
-        const result = await response.json();
-        toast.success(result.message || 'Password updated successfully!');
-        setIsSettingsModalOpen(false);
-        setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-      } else {
-        const errorData = await response.json();
-        toast.error(errorData.message || 'Failed to update password');
-      }
-    } catch {
-      toast.error('An error occurred while updating password');
-    } finally {
-      setIsUpdatingPassword(false);
-    }
-  };
-
-  const handleSettingsClick = () => { setIsSettingsModalOpen(true); setShowUserDropdown(false); closeMobileMenu(); };
 
   // ─── Mobile ──────────────────────────────────────────────────────────────────
   useEffect(() => { setIsMounted(true); }, []);
@@ -431,14 +379,6 @@ const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassw
       if (ld.userId) setUserData(ld);
     } catch { /* ignore */ }
   }, [isMounted]);
-
-  useEffect(() => {
-    const h = (event: { target: any }) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) setShowUserDropdown(false);
-    };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, []);
 
   // ─── Logo ─────────────────────────────────────────────────────────────────────
   // Logo is organization-scoped (shared across every member of the org) — see
@@ -940,11 +880,6 @@ const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassw
     setShowSubMenu(false);
   };
 
- const handleLogout = () => {
-  closeMobileMenu();
-  sessionStorage.removeItem('currentUserData'); // clear auth data
-  router.replace('/');                          // replace history, not push
-};
   const handleBoardClick = (boardId: string) => { setActiveBoardId(boardId); closeMobileMenu(); };
 
   // ─── Highlight search match ───────────────────────────────────────────────────
@@ -983,22 +918,21 @@ const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassw
 
         {/* ── Header ────────────────────────────────────────────────────────── */}
         <div className="relative bg-white border-b border-blue-500/50 shadow-md">
-          <div className="px-3 py-2.5 flex justify-between items-center">
+          {/* Logo row — enlarged so it actually reads as the org's brand mark */}
+          <div className="px-3 pt-3 pb-2 flex justify-between items-center">
             {(isSidebarOpen || isMobile) && (
-              <div className="relative group flex-1 min-w-0">
+              <div className="relative group flex-1 min-w-0 flex justify-center">
                 {/* Org logo — display only. Uploading/replacing it now happens from the
                     Master Data tab (Owner/Super Admin only); this just reflects it. */}
                 {currentLogo ? (
-                  <div className="bg-white/10 backdrop-blur-sm rounded-lg p-2 border border-blue-400/20">
-                    <img
-                      src={currentLogo}
-                      alt="Logo"
-                      width={100}
-                      height={32}
-                      className="object-contain max-h-8"
-                      onError={() => setCurrentLogo(null)}
-                    />
-                  </div>
+                  <img
+                    src={currentLogo}
+                    alt="Logo"
+                    width={160}
+                    height={56}
+                    className="object-contain max-h-14 w-auto"
+                    onError={() => setCurrentLogo(null)}
+                  />
                 ) : null}
               </div>
             )}
@@ -1053,7 +987,7 @@ const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassw
         )}
 
         {/* ── Navigation ────────────────────────────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto scrollbar-hide">
+        <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'thin', scrollbarColor: '#3b82f6 #f1f1f1' }}>
           <div className="px-3 pb-3">
             {searchQuery && (
               <div className="mb-3 p-2 bg-blue-50 rounded-lg border border-blue-200">
@@ -1209,119 +1143,6 @@ const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassw
               <Shield className="w-3.5 h-3.5 flex-shrink-0" />
               My Board Access
             </button>
-          </div>
-        )}
-
-        {/* ── User profile / dropdown ──────────────────────────────────────── */}
-        <div className="border-t border-gray-200 p-2.5 relative" ref={dropdownRef}>
-          {(isSidebarOpen || isMobile) ? (
-            <div>
-              <button onClick={toggleDropdown} className="w-full flex items-center space-x-2 p-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors text-left">
-                <div className="w-7 h-7 bg-gray-600 rounded-full flex items-center justify-center text-white font-medium text-xs flex-shrink-0">
-                  {userData.userName ? userData.userName.charAt(0).toUpperCase() : <User className="w-3 h-3" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-gray-900 truncate">{userData.userName || "N/A"}</p>
-                  <p className="text-xs text-blue-600 truncate">{userData.email || "N/A"}</p>
-                </div>
-                <div className="flex-shrink-0">
-                  {isDropdownOpen ? <ChevronLeft className="w-3.5 h-3.5 text-gray-500" /> : <ChevronRight className="w-3.5 h-3.5 text-gray-500" />}
-                </div>
-              </button>
-              {isDropdownOpen && (
-                <div className="absolute left-full bottom-0 ml-2 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-50 overflow-hidden">
-                  <div className="p-2.5 border-b border-gray-100 relative">
-                    <button onClick={() => setIsDropdownOpen(false)} className="absolute top-2 right-2 p-0.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full"><X className="w-3.5 h-3.5" /></button>
-                    <div className="flex items-center space-x-2 pr-5">
-                      <div className="w-7 h-7 bg-gray-600 rounded-full flex items-center justify-center text-white font-medium text-xs flex-shrink-0">
-                        {userData.userName ? userData.userName.charAt(0).toUpperCase() : <User className="w-3 h-3" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-gray-900 truncate">{userData.userName || "N/A"}</p>
-                        <p className="text-xs text-blue-600 truncate">{userData.email || "N/A"}</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <button onClick={handleSettingsClick} className="w-full flex items-center space-x-2 p-2.5 text-left text-xs text-gray-700 hover:bg-gray-50 transition-colors">
-                      <Settings className="w-3.5 h-3.5" /><span>Settings</span>
-                    </button>
-                    <button onClick={handleLogout} className="w-full flex items-center space-x-2 p-2.5 text-left text-xs text-gray-700 hover:bg-gray-50 transition-colors">
-                      <LogOut className="w-3.5 h-3.5" /><span>{t('header.logout')}</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div>
-              <button onClick={toggleDropdown} className="w-full flex justify-center p-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
-                <div className="w-7 h-7 bg-gray-600 rounded-full flex items-center justify-center text-white font-medium text-xs">
-                  {userData.userName ? userData.userName.charAt(0).toUpperCase() : <User className="w-3 h-3" />}
-                </div>
-              </button>
-              {isDropdownOpen && (
-                <div className="absolute left-full bottom-0 ml-2 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-50 overflow-hidden">
-                  <div className="p-2.5 border-b border-gray-100">
-                    <div className="flex items-center space-x-2">
-                      <div className="w-7 h-7 bg-gray-600 rounded-full flex items-center justify-center text-white font-medium text-xs">
-                        {userData.userName ? userData.userName.charAt(0).toUpperCase() : <User className="w-3 h-3" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-gray-900 truncate">{userData.userName || "N/A"}</p>
-                        <p className="text-xs text-blue-600 truncate">{userData.email || "N/A"}</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <button onClick={handleSettingsClick} className="w-full flex items-center space-x-2 p-2.5 text-left text-xs text-gray-700 hover:bg-gray-50 transition-colors">
-                      <Settings className="w-3.5 h-3.5" /><span>Settings</span>
-                    </button>
-                    <button onClick={handleLogout} className="w-full flex items-center space-x-2 p-2.5 text-left text-xs text-gray-700 hover:bg-gray-50 transition-colors">
-                      <LogOut className="w-3.5 h-3.5" /><span>{t('header.logout')}</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* ── Settings / Change Password Modal ─────────────────────────────── */}
-        {isSettingsModalOpen && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full mx-4 overflow-hidden">
-              <div className="flex justify-between items-center px-5 py-4 border-b border-gray-200">
-                <h2 className="text-base font-bold text-gray-900">Change Password</h2>
-                <button onClick={() => { setIsSettingsModalOpen(false); setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' }); }} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all duration-200">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="p-5 space-y-3">
-                {([
-                  { label: 'Current Password', key: 'currentPassword' as const, show: showCurrentPassword, toggle: () => setShowCurrentPassword(!showCurrentPassword) },
-                  { label: 'New Password', key: 'newPassword' as const, show: showNewPassword, toggle: () => setShowNewPassword(!showNewPassword) },
-                  { label: 'Confirm New Password', key: 'confirmPassword' as const, show: showConfirmPassword, toggle: () => setShowConfirmPassword(!showConfirmPassword) },
-                ]).map(({ label, key, show, toggle }) => (
-                  <div key={key}>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1.5">{label}</label>
-                    <div className="relative">
-                      <input type={show ? "text" : "password"} value={passwordData[key]} onChange={e => setPasswordData({ ...passwordData, [key]: e.target.value })}
-                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 pr-9" placeholder={`Enter ${label.toLowerCase()}`} />
-                      <button type="button" onClick={toggle} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700">
-                        {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="flex justify-end gap-2 px-5 py-3 border-t bg-gray-50">
-                <button onClick={() => { setIsSettingsModalOpen(false); setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' }); }} disabled={isUpdatingPassword} className="px-4 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50">Cancel</button>
-                <button onClick={handlePasswordUpdate} disabled={isUpdatingPassword} className="px-4 py-2 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5">
-                  {isUpdatingPassword ? (<><div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" />Updating...</>) : 'Update Password'}
-                </button>
-              </div>
-            </div>
           </div>
         )}
 

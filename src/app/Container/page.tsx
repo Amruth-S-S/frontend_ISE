@@ -20,7 +20,7 @@ import React from "react";
 import { saveAs } from 'file-saver';
 import * as XLSX from 'xlsx';
 // import { useDropzone } from "react-dropzone";
-import { PencilIcon, TrashIcon, PlusIcon, CheckIcon, ChevronUpIcon, ChevronDownIcon, Edit, Sparkles, LayoutGrid, MousePointerClick, Users, ArrowRight } from 'lucide-react';
+import { PencilIcon, TrashIcon, PlusIcon, CheckIcon, ChevronUpIcon, ChevronDownIcon, Edit, Sparkles, LayoutGrid, MousePointerClick, Users, ArrowRight, Settings, LogOut, Eye, EyeOff, X, User as UserIcon } from 'lucide-react';
 import { Pie, Bar, Line } from "react-chartjs-2";
 import { MdArrowDropDown, MdArrowDropUp } from 'react-icons/md';
 import {
@@ -1186,7 +1186,15 @@ useEffect(() => {
   // Name of the Role (group) the logged-in user's email belongs to — shown in the header.
   const [userRoleName, setUserRoleName] = useState<string | null>(null);
 
-
+  // ── Account menu (name/email + Settings + Logout) — lives in the header ──
+  const [showAccountDropdown, setShowAccountDropdown] = useState(false);
+  const accountDropdownRef = useRef<HTMLDivElement>(null);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
   // Fetch user details from localStorage inside useEffect
   useEffect(() => {
@@ -1244,6 +1252,52 @@ useEffect(() => {
     return () => { cancelled = true; };
   }, [user.orgId, user.id, user.email]);
 
+  const handleLogout = () => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('currentUserData');
+      ['loggedInUserEmail', 'loggedInUserId', 'loggedInUserRole', 'loggedInUserName', 'client_user_id'].forEach(k => localStorage.removeItem(k));
+    }
+    router.replace('/Login');
+  };
+
+  const handleSettingsClick = () => { setShowSettingsModal(true); setShowAccountDropdown(false); };
+
+  const handlePasswordUpdate = async () => {
+    if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
+      toast.error('Please fill in all password fields'); return;
+    }
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      toast.error('New password and confirm password do not match'); return;
+    }
+    if (passwordData.newPassword.length < 8) {
+      toast.error('Password must be at least 8 characters long'); return;
+    }
+    setIsUpdatingPassword(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/change-password?user_id=${user.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': EXCEL_API_KEY },
+        body: JSON.stringify({
+          current_password: passwordData.currentPassword,
+          new_password: passwordData.newPassword,
+          confirm_password: passwordData.confirmPassword,
+        }),
+      });
+      if (response.ok) {
+        const result = await response.json();
+        toast.success(result.message || 'Password updated successfully!');
+        setShowSettingsModal(false);
+        setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      } else {
+        const errorData = await response.json();
+        toast.error(errorData.message || 'Failed to update password');
+      }
+    } catch {
+      toast.error('An error occurred while updating password');
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+  };
 
   // Toggle dropdown visibility
   const toggleDropdown = () => {
@@ -1260,6 +1314,9 @@ useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setShowDropdown(false);
+      }
+      if (accountDropdownRef.current && !accountDropdownRef.current.contains(event.target as Node)) {
+        setShowAccountDropdown(false);
       }
     }
 
@@ -4289,8 +4346,82 @@ const SpeechRecognition =
                 </div>
               )}
             </div>
+
+            {/* Account menu — avatar/name pill, opens name+email+Settings+Logout */}
+            <div className="relative" ref={accountDropdownRef}>
+              <button
+                onClick={() => setShowAccountDropdown(v => !v)}
+                className="flex items-center gap-2 pl-1.5 pr-2.5 py-1.5 rounded-full border border-gray-200 hover:bg-gray-50 transition-colors"
+              >
+                <div className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-semibold flex-shrink-0">
+                  {user.name ? user.name.charAt(0).toUpperCase() : <UserIcon className="w-3.5 h-3.5" />}
+                </div>
+                <span className="text-sm font-medium text-gray-800">{user.name || 'Account'}</span>
+                {showAccountDropdown ? <ChevronUpIcon className="w-3.5 h-3.5 text-gray-400" /> : <ChevronDownIcon className="w-3.5 h-3.5 text-gray-400" />}
+              </button>
+
+              {showAccountDropdown && (
+                <div className="absolute right-0 mt-2 w-72 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden">
+                  <div className="flex items-center gap-3 px-4 py-3.5">
+                    <div className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-semibold flex-shrink-0">
+                      {user.name ? user.name.charAt(0).toUpperCase() : <UserIcon className="w-4 h-4" />}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 truncate">{user.name || 'N/A'}</p>
+                      <p className="text-xs text-gray-500 truncate">{user.email || 'N/A'}</p>
+                    </div>
+                  </div>
+                  <div className="border-t border-gray-100">
+                    <button onClick={handleSettingsClick} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+                      <Settings className="w-4 h-4 text-gray-500" /><span>Settings</span>
+                    </button>
+                    <button onClick={handleLogout} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 transition-colors">
+                      <LogOut className="w-4 h-4" /><span>Logout</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </header>
+
+        {/* ── Settings / Change Password Modal ── */}
+        {showSettingsModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full mx-4 overflow-hidden">
+              <div className="flex justify-between items-center px-5 py-4 border-b border-gray-200">
+                <h2 className="text-base font-bold text-gray-900">Change Password</h2>
+                <button onClick={() => { setShowSettingsModal(false); setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' }); }} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all duration-200">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="p-5 space-y-3">
+                {([
+                  { label: 'Current Password', key: 'currentPassword' as const, show: showCurrentPassword, toggle: () => setShowCurrentPassword(!showCurrentPassword) },
+                  { label: 'New Password', key: 'newPassword' as const, show: showNewPassword, toggle: () => setShowNewPassword(!showNewPassword) },
+                  { label: 'Confirm New Password', key: 'confirmPassword' as const, show: showConfirmPassword, toggle: () => setShowConfirmPassword(!showConfirmPassword) },
+                ]).map(({ label, key, show, toggle }) => (
+                  <div key={key}>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1.5">{label}</label>
+                    <div className="relative">
+                      <input type={show ? "text" : "password"} value={passwordData[key]} onChange={e => setPasswordData({ ...passwordData, [key]: e.target.value })}
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 pr-9" placeholder={`Enter ${label.toLowerCase()}`} />
+                      <button type="button" onClick={toggle} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700">
+                        {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-end gap-2 px-5 py-3 border-t bg-gray-50">
+                <button onClick={() => { setShowSettingsModal(false); setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' }); }} disabled={isUpdatingPassword} className="px-4 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50">Cancel</button>
+                <button onClick={handlePasswordUpdate} disabled={isUpdatingPassword} className="px-4 py-2 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5">
+                  {isUpdatingPassword ? (<><div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" />Updating...</>) : 'Update Password'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="flex items-center justify-center p-6" style={{ minHeight: 'calc(100vh - 60px)' }}>
           <div className="relative max-w-lg w-full">
@@ -4394,8 +4525,82 @@ const SpeechRecognition =
               </div>
             )}
           </div>
+
+          {/* Account menu — avatar/name pill, opens name+email+Settings+Logout */}
+          <div className="relative" ref={accountDropdownRef}>
+            <button
+              onClick={() => setShowAccountDropdown(v => !v)}
+              className="flex items-center gap-2 pl-1.5 pr-2.5 py-1.5 rounded-full border border-gray-200 hover:bg-gray-50 transition-colors"
+            >
+              <div className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-semibold flex-shrink-0">
+                {user.name ? user.name.charAt(0).toUpperCase() : <UserIcon className="w-3.5 h-3.5" />}
+              </div>
+              <span className="text-sm font-medium text-gray-800">{user.name || 'Account'}</span>
+              {showAccountDropdown ? <ChevronUpIcon className="w-3.5 h-3.5 text-gray-400" /> : <ChevronDownIcon className="w-3.5 h-3.5 text-gray-400" />}
+            </button>
+
+            {showAccountDropdown && (
+              <div className="absolute right-0 mt-2 w-72 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden">
+                <div className="flex items-center gap-3 px-4 py-3.5">
+                  <div className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-semibold flex-shrink-0">
+                    {user.name ? user.name.charAt(0).toUpperCase() : <UserIcon className="w-4 h-4" />}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-gray-900 truncate">{user.name || 'N/A'}</p>
+                    <p className="text-xs text-gray-500 truncate">{user.email || 'N/A'}</p>
+                  </div>
+                </div>
+                <div className="border-t border-gray-100">
+                  <button onClick={handleSettingsClick} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+                    <Settings className="w-4 h-4 text-gray-500" /><span>Settings</span>
+                  </button>
+                  <button onClick={handleLogout} className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 transition-colors">
+                    <LogOut className="w-4 h-4" /><span>Logout</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </header>
+
+      {/* ── Settings / Change Password Modal ── */}
+      {showSettingsModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full mx-4 overflow-hidden">
+            <div className="flex justify-between items-center px-5 py-4 border-b border-gray-200">
+              <h2 className="text-base font-bold text-gray-900">Change Password</h2>
+              <button onClick={() => { setShowSettingsModal(false); setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' }); }} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all duration-200">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-3">
+              {([
+                { label: 'Current Password', key: 'currentPassword' as const, show: showCurrentPassword, toggle: () => setShowCurrentPassword(!showCurrentPassword) },
+                { label: 'New Password', key: 'newPassword' as const, show: showNewPassword, toggle: () => setShowNewPassword(!showNewPassword) },
+                { label: 'Confirm New Password', key: 'confirmPassword' as const, show: showConfirmPassword, toggle: () => setShowConfirmPassword(!showConfirmPassword) },
+              ]).map(({ label, key, show, toggle }) => (
+                <div key={key}>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">{label}</label>
+                  <div className="relative">
+                    <input type={show ? "text" : "password"} value={passwordData[key]} onChange={e => setPasswordData({ ...passwordData, [key]: e.target.value })}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 pr-9" placeholder={`Enter ${label.toLowerCase()}`} />
+                    <button type="button" onClick={toggle} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700">
+                      {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-3 border-t bg-gray-50">
+              <button onClick={() => { setShowSettingsModal(false); setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' }); }} disabled={isUpdatingPassword} className="px-4 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50">Cancel</button>
+              <button onClick={handlePasswordUpdate} disabled={isUpdatingPassword} className="px-4 py-2 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5">
+                {isUpdatingPassword ? (<><div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" />Updating...</>) : 'Update Password'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* <header className="bg-white border-b p-4 flex justify-between items-center shadow-md">
         <h1 className="text-xl font-semibold">Sales Analysis Board</h1>
